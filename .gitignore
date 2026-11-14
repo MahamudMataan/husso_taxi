@@ -23,4 +23,6 @@
 /vendor
 Homestead.json
 Homestead.yaml
+hostinger_upload_*/
+hostinger_upload_*.zip
 Thumbs.db

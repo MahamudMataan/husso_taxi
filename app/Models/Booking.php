@@ -9,6 +9,17 @@ use Illuminate\Support\Str;
 
 class Booking extends Model
 {
+    public const ACTIVE_STATUSES = ['driver_en_route', 'arrived', 'picked_up'];
+    public const OPEN_STATUSES = ['new', 'driver_assigned', ...self::ACTIVE_STATUSES];
+
+    private const DISPATCH_SEQUENCE = [
+        'new' => 'driver_assigned',
+        'driver_assigned' => 'driver_en_route',
+        'driver_en_route' => 'arrived',
+        'arrived' => 'picked_up',
+        'picked_up' => 'completed',
+    ];
+
     protected $fillable = [
         'reference',
         'tracking_token',
@@ -80,6 +91,16 @@ class Booking extends Model
         }
 
         return route('bookings.track', $this->tracking_token);
+    }
+
+    public function nextDispatchStatus(): ?string
+    {
+        return self::DISPATCH_SEQUENCE[$this->booking_status] ?? null;
+    }
+
+    public function canCancelDispatch(): bool
+    {
+        return in_array($this->booking_status, self::OPEN_STATUSES, true);
     }
 
     public function distanceFare(): float

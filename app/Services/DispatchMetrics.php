@@ -18,7 +18,7 @@ class DispatchMetrics
      */
     public function overview(): array
     {
-        $today = now()->toDateString();
+        $today = now('Europe/Amsterdam')->toDateString();
         $todayBookings = Booking::whereDate('ride_date', $today);
         $activeShift = $this->activeShift();
         $todayRevenue = (clone $todayBookings)->whereIn('payment_status', ['paid', 'pay_later'])->sum('quoted_amount');
@@ -27,8 +27,8 @@ class DispatchMetrics
         return [
             'today_bookings' => $todayCount,
             'today_revenue' => $todayRevenue,
-            'open_bookings' => Booking::whereIn('booking_status', ['new', 'driver_assigned', 'driver_en_route', 'arrived'])->count(),
-            'active_rides' => Booking::whereIn('booking_status', ['driver_en_route', 'arrived', 'picked_up'])->count(),
+            'open_bookings' => Booking::whereIn('booking_status', Booking::OPEN_STATUSES)->count(),
+            'active_rides' => Booking::whereIn('booking_status', Booking::ACTIVE_STATUSES)->count(),
             'driver_online' => (bool) $activeShift,
             'active_shift' => $activeShift,
             'average_ride_value' => $todayCount > 0 ? round($todayRevenue / $todayCount, 2) : 0,

@@ -22,6 +22,12 @@ Route::get('/contact', function () {
     return view('contact');
 })->name('contact');
 
+Route::get('/sitemap.xml', function () {
+    return response()->view('sitemap', [
+        'pages' => [url('/'), url('/?lang=en'), route('contact'), route('contact', ['lang' => 'en'])],
+    ])->header('Content-Type', 'application/xml; charset=UTF-8');
+})->name('sitemap');
+
 Route::post('/payments/mollie', [MolliePaymentController::class, 'store'])->name('payments.mollie.store');
 Route::get('/payments/mollie/return', [MolliePaymentController::class, 'return'])->name('payments.mollie.return');
 Route::post('/payments/mollie/webhook', [MolliePaymentController::class, 'webhook'])->name('payments.mollie.webhook');
@@ -46,7 +52,9 @@ Route::get('/track/{token}/state', function (string $token): JsonResponse {
         'reference' => $booking->reference,
         'booking_status' => $booking->booking_status,
         'payment_status' => $booking->payment_status,
-        'eta_min' => $booking->driver_eta_min ?: $booking->duration_min,
+        'eta_min' => in_array($booking->booking_status, ['driver_en_route', 'arrived'], true)
+            ? $booking->driver_eta_min
+            : null,
         'driver' => [
             'name' => $booking->driver_name ?: DispatchMetrics::DRIVER_NAME,
             'phone' => $booking->driver_phone ?: DispatchMetrics::DRIVER_PHONE,
@@ -63,6 +71,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return view('admin.dashboard', [
             'stats' => $metrics->overview(),
             'bookings' => $metrics->recentBookings(10),
+            'activeBooking' => $metrics->activeBooking(),
         ]);
     })->name('admin.dashboard');
 
@@ -98,28 +107,46 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('admin.live.state');
 
     Route::get('/admin/bookings', function () {
-        $search = trim((string) request('search'));
+        $queryParams = request()->only(['search', 'filter']);
+        $search = is_string($queryParams['search'] ?? null) ? trim($queryParams['search']) : '';
+        $filter = in_array($queryParams['filter'] ?? '', ['today', 'open', 'payment'], true) ? $queryParams['filter'] : '';
+        $filters = array_filter(['search' => $search, 'filter' => $filter], fn ($value) => $value !== '');
 
         $bookings = Booking::query()
             ->when($search !== '', function (Builder $query) use ($search) {
-                $query->where('reference', 'like', "%{$search}%")
-                    ->orWhere('customer_name', 'like', "%{$search}%")
-                    ->orWhere('pickup', 'like', "%{$search}%")
-                    ->orWhere('destination', 'like', "%{$search}%");
+                $query->where(function (Builder $matches) use ($search) {
+                    $matches->where('reference', 'like', "%{$search}%")
+                        ->orWhere('customer_name', 'like', "%{$search}%")
+                        ->orWhere('pickup', 'like', "%{$search}%")
+                        ->orWhere('destination', 'like', "%{$search}%");
+                    if (ctype_digit($search)) {
+                        $matches->orWhereKey($search);
+                    }
+                });
             })
+            ->when($filter === 'today', fn (Builder $query) => $query->whereDate('ride_date', now('Europe/Amsterdam')->toDateString()))
+            ->when($filter === 'open', fn (Builder $query) => $query->whereIn('booking_status', Booking::OPEN_STATUSES))
+            ->when($filter === 'payment', fn (Builder $query) => $query->whereIn('payment_status', ['pending', 'pay_later']))
             ->latest()
             ->paginate(20)
-            ->withQueryString();
+            ->appends($filters);
+
+        if ($bookings->currentPage() > 1) {
+            $filters['page'] = $bookings->currentPage();
+        }
 
         return view('admin.bookings.index', [
             'bookings' => $bookings,
             'search' => $search,
+            'filter' => $filter,
+            'returnFilters' => $filters,
         ]);
     })->name('admin.bookings.index');
 
     Route::get('/admin/bookings/{booking}', function (Booking $booking) {
         return view('admin.bookings.show', [
             'booking' => $booking->load('notifications'),
+            'returnFilters' => request()->only(['search', 'filter', 'page']),
         ]);
     })->name('admin.bookings.show');
 
@@ -208,7 +235,7 @@ Route::patch('/dashboard/bookings/{booking}/review', function (Booking $booking,
         'admin_status' => ['required', 'in:accepted,rejected'],
     ]);
 
-    $booking->update([
+    $changed = Booking::whereKey($booking->id)->where('booking_status', 'new')->update([
         'admin_status' => $validated['admin_status'],
         'booking_status' => $validated['admin_status'] === 'accepted' ? 'driver_assigned' : 'rejected',
         'driver_name' => 'Omar Hussein',
@@ -218,8 +245,12 @@ Route::patch('/dashboard/bookings/{booking}/review', function (Booking $booking,
         'reviewed_at' => now(),
     ]);
 
+    if (! $changed) {
+        return back()->withErrors(['dispatch' => 'Deze rit is al beoordeeld. Controleer de huidige ritstatus.']);
+    }
+
     if ($validated['admin_status'] === 'accepted') {
-        $notifications->dispatch($booking, 'driver_assigned');
+        $notifications->dispatch($booking->refresh(), 'driver_assigned');
     }
 
     return back()->with('status', $validated['admin_status'] === 'accepted'
@@ -230,24 +261,47 @@ Route::patch('/dashboard/bookings/{booking}/review', function (Booking $booking,
 Route::patch('/dashboard/bookings/{booking}/dispatch', function (Booking $booking, BookingNotificationDispatcher $notifications) {
     $validated = request()->validate([
         'booking_status' => ['required', 'in:driver_assigned,driver_en_route,arrived,picked_up,completed,canceled'],
+        'reason' => ['required_if:booking_status,canceled', 'nullable', 'string', 'max:500'],
     ]);
 
-    $booking->update([
-        'booking_status' => $validated['booking_status'],
-        'admin_status' => 'accepted',
-        'driver_name' => $booking->driver_name ?: 'Omar Hussein',
-        'driver_phone' => $booking->driver_phone ?: '+31 6 86463268',
-        'driver_vehicle' => $booking->driver_vehicle ?: 'Husso Taxi',
-        'driver_eta_min' => match ($validated['booking_status']) {
+    $nextStatus = $validated['booking_status'];
+    $canceling = $nextStatus === 'canceled';
+
+    if ($canceling ? ! $booking->canCancelDispatch() : $booking->nextDispatchStatus() !== $nextStatus) {
+        return back()->withErrors(['dispatch' => 'Deze actie past niet bij de huidige ritstatus. Controleer de rit en probeer opnieuw.']);
+    }
+
+    $updates = [
+        'booking_status' => $nextStatus,
+        'driver_eta_min' => match ($nextStatus) {
             'driver_en_route' => 6,
             'arrived' => 1,
             'picked_up', 'completed', 'canceled' => null,
             default => $booking->driver_eta_min ?: 8,
         },
-    ]);
+    ];
 
-    if ($validated['booking_status'] !== 'canceled') {
-        $notifications->dispatch($booking->refresh(), match ($validated['booking_status']) {
+    if ($canceling) {
+        $updates['dispatch_notes'] = trim($booking->dispatch_notes."\nAnnulering: ".$validated['reason']);
+    } else {
+        $updates += [
+            'admin_status' => 'accepted',
+            'driver_name' => $booking->driver_name ?: DispatchMetrics::DRIVER_NAME,
+            'driver_phone' => $booking->driver_phone ?: DispatchMetrics::DRIVER_PHONE,
+            'driver_vehicle' => $booking->driver_vehicle ?: DispatchMetrics::DRIVER_VEHICLE,
+        ];
+        if ($nextStatus === 'driver_assigned') {
+            $updates['reviewed_at'] = now();
+        }
+    }
+
+    $changed = Booking::whereKey($booking->id)->where('booking_status', $booking->booking_status)->update($updates);
+    if (! $changed) {
+        return back()->withErrors(['dispatch' => 'De ritstatus is zojuist gewijzigd. Controleer de rit en probeer opnieuw.']);
+    }
+
+    if (! $canceling) {
+        $notifications->dispatch($booking->refresh(), match ($nextStatus) {
             'driver_assigned' => 'driver_assigned',
             'driver_en_route', 'arrived' => 'driver_arriving',
             'picked_up' => 'trip_started',
@@ -255,7 +309,7 @@ Route::patch('/dashboard/bookings/{booking}/dispatch', function (Booking $bookin
         });
     }
 
-    return back()->with('status', 'Boeking bijgewerkt naar de volgende dispatch stap.');
+    return back()->with('status', $canceling ? 'Rit geannuleerd.' : 'Ritstatus bijgewerkt.');
 })->middleware(['auth', 'verified'])->name('dashboard.bookings.dispatch');
 
 Route::patch('/dashboard/bookings/{booking}/payment', function (Booking $booking, BookingNotificationDispatcher $notifications) {

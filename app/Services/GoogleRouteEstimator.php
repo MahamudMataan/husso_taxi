@@ -4,7 +4,9 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class GoogleRouteEstimator
 {
@@ -21,9 +23,17 @@ class GoogleRouteEstimator
             .round((float) $destination['latitude'], 4).','
             .round((float) $destination['longitude'], 4);
 
-        return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($origin, $destination) {
+        try {
+            return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($origin, $destination) {
+                return $this->fetchFromGoogle($origin, $destination);
+            });
+        } catch (Throwable $exception) {
+            Log::warning('Route estimate cache failed; fetching without cache.', [
+                'message' => $exception->getMessage(),
+            ]);
+
             return $this->fetchFromGoogle($origin, $destination);
-        });
+        }
     }
 
     private function fetchFromGoogle(array $origin, array $destination): array
@@ -60,6 +70,11 @@ class GoogleRouteEstimator
         ]);
 
         if (! $response->successful()) {
+            Log::warning('Google Routes estimate failed.', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+
             throw new RuntimeException('Route could not be calculated.');
         }
 
