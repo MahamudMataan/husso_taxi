@@ -1,5 +1,11 @@
 # Husso Taxi uitrollen
 
+## Live sinds 14 november 2026
+
+Hostinger draait release `0e4654e` met het ontwerp, favicon en de nieuwe tarieven. Op de live site zijn de openbare pagina’s, bestanden, inlogvereisten en één prijsindicatie gecontroleerd. De iDEAL-flow, betalen achteraf, ritbon en ingelogde beheerpagina’s zijn vooraf getest op Hostinger met een tijdelijke database en nagebootste diensten. Tijdens de uitrol zijn geen echte boekingen of betalingen gestart.
+
+De uitrol heeft 46 bestanden vervangen of toegevoegd. De bestaande bestanden zijn privé geback-upt. De productie-`.env` en `public_html/index.php` zijn geverifieerd en er zijn geen databasemigraties uitgevoerd.
+
 ## In deze versie
 
 - Het mobiele en desktopontwerp vernieuwt de boeking, contactpagina, tracking, login, het ritbeheer en het chauffeursdashboard. De Schipholfoto is van [Christo, CC0](https://commons.wikimedia.org/wiki/File:Amsterdam,_Airport,_Schiphol,_25.jpg). De fontlicenties staan bij de fonts in `public/fonts/`.
@@ -8,7 +14,7 @@
 
 ## GitHub en patches
 
-De patchreeks begint bij commit `2b8a215`. Gebruik een schone checkout van die basis als je de patches wilt toepassen. De reeks bevat ontwerp en boekingsflow, favicon, tarieven en deze handleiding, in die volgorde. De losse patchbestanden staan lokaal in `docs/patches/`. Breng de wijzigingen via een aparte tak en pull request naar `main`.
+De patchreeks begint bij commit `2b8a215`. Gebruik een schone checkout van die basis als je de patches wilt toepassen. De reeks bevat ontwerp en boekingsflow, favicon, tarieven, deze handleiding en het uitrolverslag, in die volgorde. De losse patchbestanden staan lokaal in `docs/patches/`. Breng de wijzigingen via een aparte tak en pull request naar `main`.
 
 ```sh
 git am /pad/naar/patches/000*.patch
