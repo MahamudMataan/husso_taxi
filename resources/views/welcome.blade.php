@@ -23,8 +23,6 @@
             'destination', 'destination_latitude', 'destination_longitude',
             'customer_name', 'customer_email', 'phone', 'ride_date', 'ride_time', 'passengers', 'ride_type',
         ]),
-        'distanceRate' => \App\Services\BookingPriceCalculator::KM_RATE,
-        'timeRate' => \App\Services\BookingPriceCalculator::MINUTE_RATE,
         'messages' => [
             'searching' => $isEnglish ? 'Searching for addresses…' : 'Adressen zoeken…',
             'selecting' => $isEnglish ? 'Loading address…' : 'Adres laden…',

@@ -13,11 +13,11 @@ class GoogleRouteEstimator
     /**
      * @param  array{latitude: numeric, longitude: numeric}  $origin
      * @param  array{latitude: numeric, longitude: numeric}  $destination
-     * @return array{distance_km: float, duration_min: int}
+     * @return array{distance_km: float, distance_meters: int, duration_min: int}
      */
     public function estimate(array $origin, array $destination): array
     {
-        $cacheKey = 'route:'
+        $cacheKey = 'route:v2:'
             .round((float) $origin['latitude'], 4).','
             .round((float) $origin['longitude'], 4).':'
             .round((float) $destination['latitude'], 4).','
@@ -88,6 +88,7 @@ class GoogleRouteEstimator
 
         return [
             'distance_km'  => round($distanceMeters / 1000, 1),
+            'distance_meters' => $distanceMeters,
             'duration_min' => (int) ceil($durationSeconds / 60),
         ];
     }

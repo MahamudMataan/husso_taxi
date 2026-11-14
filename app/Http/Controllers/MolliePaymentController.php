@@ -51,7 +51,8 @@ class MolliePaymentController extends Controller
                 : 'De route kon niet veilig gecontroleerd worden. Kies ophaal- en bestemmingsplaats opnieuw.');
         }
 
-        $paymentAmount = (float) (config('services.mollie.test_amount') ?: $booking->quoted_amount);
+        $testAmount = str_starts_with($apiKey, 'test_') ? config('services.mollie.test_amount') : null;
+        $paymentAmount = (float) ($testAmount ?: $booking->quoted_amount);
         $paymentAmount = max($paymentAmount, 0.01);
 
         $response = Http::withToken($apiKey)
@@ -90,13 +91,14 @@ class MolliePaymentController extends Controller
         if (! $response->successful()) {
             Log::warning('Mollie payment creation failed.', [
                 'status' => $response->status(),
-                'body' => $response->json(),
             ]);
 
             $booking->update(['payment_status' => 'checkout_failed']);
             $notifications->dispatch($booking->refresh(), 'payment_failed');
 
-            return back()->with('payment_error', $response->json('detail') ?: 'Mollie payment could not be created.');
+            return back()->with('payment_error', $language === 'en'
+                ? 'Online payment could not be started. Please try again or choose to pay later.'
+                : 'Online betalen kon niet worden gestart. Probeer opnieuw of kies voor later betalen.');
         }
 
         $checkoutUrl = $response->json('_links.checkout.href');

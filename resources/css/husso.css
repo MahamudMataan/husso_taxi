@@ -318,6 +318,17 @@ html:has(.site-booking) {
     letter-spacing: -.015em;
 }
 
+.booking-rates {
+    margin-top: 1.25rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--line);
+}
+
+.booking-rates h3 {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
 .booking-steps {
     display: grid;
     grid-template-columns: .85fr 1.15fr 1fr;

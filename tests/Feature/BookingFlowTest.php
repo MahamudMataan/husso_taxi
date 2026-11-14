@@ -23,6 +23,8 @@ class BookingFlowTest extends TestCase
         $response->assertSee('Volledige naam');
         $response->assertSee('E-mail voor bevestiging');
         $response->assertSee('Geschatte prijs');
+        $response->assertSee('Boven 55 km (hele rit)');
+        $response->assertSee('€ 2,50/km');
         $response->assertSee('Bereken route en prijs');
         $response->assertSee('Boeking controleren');
         $response->assertSee('Boekingsoverzicht');
@@ -58,6 +60,8 @@ class BookingFlowTest extends TestCase
         $response->assertOk();
         $response->assertSee('Full name');
         $response->assertSee('Approximate price');
+        $response->assertSee('Over 55 km (entire ride)');
+        $response->assertSee('€ 2.50/km');
         $response->assertSee('Calculate route and price');
         $response->assertSee('Book, pay later');
         $response->assertSee('Pay now with iDEAL');
@@ -98,6 +102,7 @@ class BookingFlowTest extends TestCase
             ->assertJson([
                 'distance_km' => 12.3,
                 'duration_min' => 26,
+                'quoted_amount' => 56.51,
             ]);
 
         Http::assertSent(function ($request) {
@@ -205,7 +210,7 @@ class BookingFlowTest extends TestCase
             'routes.googleapis.com/directions/v2:computeRoutes' => Http::response([
                 'routes' => [
                     [
-                        'distanceMeters' => 12340,
+                        'distanceMeters' => 55001,
                         'duration' => '1560s',
                     ],
                 ],
@@ -224,7 +229,10 @@ class BookingFlowTest extends TestCase
             'customer_email' => 'klant@example.nl',
             'payment_method' => 'pay_later',
             'payment_status' => 'pay_later',
-            'quoted_amount' => 49.90,
+            'base_fare' => 4.00,
+            'km_rate' => 2.50,
+            'minute_rate' => 0.52,
+            'quoted_amount' => 155.02,
         ]);
         Queue::assertPushed(SendBookingNotification::class, 1);
     }
@@ -242,7 +250,11 @@ class BookingFlowTest extends TestCase
 
     public function test_mollie_payment_creates_ideal_checkout_with_booking_metadata(): void
     {
-        config(['services.mollie.key' => 'test_fake_key', 'services.google_maps.key' => 'fake-google-key']);
+        config([
+            'services.mollie.key' => 'live_fake_key',
+            'services.mollie.test_amount' => 0.01,
+            'services.google_maps.key' => 'fake-google-key',
+        ]);
 
         Http::fake([
             'routes.googleapis.com/directions/v2:computeRoutes' => Http::response([
@@ -274,7 +286,7 @@ class BookingFlowTest extends TestCase
 
             return $request->url() === 'https://api.mollie.com/v2/payments'
                 && $payload['method'] === 'ideal'
-                && $payload['amount']['value'] === '49.90'
+                && $payload['amount']['value'] === '56.51'
                 && $payload['metadata']['customer_name'] === 'Test Klant'
                 && $payload['metadata']['customer_email'] === 'klant@example.nl'
                 && $payload['metadata']['pickup'] === 'Wegastraat, Nederland'
@@ -293,7 +305,7 @@ class BookingFlowTest extends TestCase
             'payment_method' => 'ideal',
             'payment_status' => 'pending',
             'mollie_payment_id' => 'tr_test_payment',
-            'quoted_amount' => 49.90,
+            'quoted_amount' => 56.51,
         ]);
 
         $booking = Booking::firstOrFail();

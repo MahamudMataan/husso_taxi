@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\BookingPriceCalculator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
@@ -105,17 +104,17 @@ class Booking extends Model
 
     public function distanceFare(): float
     {
-        return round((float) $this->distance_km * BookingPriceCalculator::KM_RATE, 2);
+        return round((float) $this->distance_km * (float) $this->km_rate, 2);
     }
 
     public function timeFare(): float
     {
-        return round((int) $this->duration_min * BookingPriceCalculator::MINUTE_RATE, 2);
+        return round((int) $this->duration_min * (float) $this->minute_rate, 2);
     }
 
     public function calculatedFare(): float
     {
-        return round($this->distanceFare() + $this->timeFare(), 2);
+        return (float) $this->quoted_amount;
     }
 
     public function notifications(): HasMany

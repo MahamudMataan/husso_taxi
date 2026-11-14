@@ -52,10 +52,7 @@
                 </section>
                 <section class="dispatch-panel dispatch-panel-body">
                     <h2 class="dispatch-heading">Prijsmodel</h2>
-                    <dl class="dispatch-detail-list">
-                        <div class="dispatch-fare"><dt>Per kilometer</dt><dd>€ {{ number_format(\App\Services\BookingPriceCalculator::KM_RATE, 2, ',', '.') }}</dd></div>
-                        <div class="dispatch-fare"><dt>Per minuut</dt><dd>€ {{ number_format(\App\Services\BookingPriceCalculator::MINUTE_RATE, 2, ',', '.') }}</dd></div>
-                    </dl>
+                    <x-husso.price-rules />
                 </section>
             </aside>
         </div>

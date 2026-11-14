@@ -27,7 +27,7 @@ class BookingCreator
             'longitude' => $validated['destination_longitude'],
         ]);
 
-        $quotedAmount = $this->priceCalculator->quote($route['distance_km'], $route['duration_min']);
+        $quotedAmount = $this->priceCalculator->quote($route['distance_km'], $route['duration_min'], $route['distance_meters']);
 
         $booking = Booking::create([
             'reference' => $this->reference(),
@@ -49,7 +49,7 @@ class BookingCreator
             'distance_km' => $route['distance_km'],
             'duration_min' => $route['duration_min'],
             'base_fare' => BookingPriceCalculator::BASE_FARE,
-            'km_rate' => BookingPriceCalculator::KM_RATE,
+            'km_rate' => $this->priceCalculator->kilometerRate($route['distance_meters']),
             'minute_rate' => BookingPriceCalculator::MINUTE_RATE,
             'quoted_amount' => $quotedAmount,
             'payment_method' => $paymentMethod,

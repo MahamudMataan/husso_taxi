@@ -169,4 +169,9 @@
             </div>
         </div>
     </form>
+
+    <section class="booking-rates" aria-labelledby="booking-rates-title">
+        <h3 id="booking-rates-title">{{ $isEnglish ? 'Fares' : 'Tarieven' }}</h3>
+        <x-husso.price-rules :is-english="$isEnglish" />
+    </section>
 </section>

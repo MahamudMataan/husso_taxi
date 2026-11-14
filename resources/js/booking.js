@@ -276,7 +276,7 @@ export function booking(config) {
                     destination: { latitude: destination.latitude, longitude: destination.longitude },
                 }, request.signal);
                 if (request.signal.aborted) return;
-                if (!Number.isFinite(quote.distance_km) || !Number.isFinite(quote.duration_min)) {
+                if (!Number.isFinite(quote.distance_km) || !Number.isFinite(quote.duration_min) || !Number.isFinite(quote.quoted_amount)) {
                     throw new Error('Missing route estimate');
                 }
                 this.quote = quote;
@@ -289,8 +289,7 @@ export function booking(config) {
         },
 
         estimateTotal() {
-            if (!this.quote) return 0;
-            return this.quote.distance_km * config.distanceRate + this.quote.duration_min * config.timeRate;
+            return this.quote?.quoted_amount ?? 0;
         },
 
         money(value) {
