@@ -13,6 +13,7 @@
 /.zed
 /auth.json
 /dist
+/docs/patches/
 /node_modules
 /public/build
 /public/dist
@@ -23,4 +24,6 @@
 /vendor
 Homestead.json
 Homestead.yaml
+hostinger_upload_*/
+hostinger_upload_*.zip
 Thumbs.db

@@ -6,6 +6,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class PlaceSearchController extends Controller
 {
@@ -20,15 +22,15 @@ class PlaceSearchController extends Controller
         $apiKey = config('services.google_maps.key');
 
         if (! $apiKey) {
-            return response()->json(['suggestions' => []]);
+            return response()->json(['message' => 'Google Maps API key is not configured.'], 422);
         }
 
         $language = ($validated['language'] ?? 'nl') === 'en' ? 'en' : 'nl';
         $input = trim($validated['input']);
         $cacheKey = 'autocomplete:'.md5($language.':'.strtolower($input));
 
-        $rawSuggestions = Cache::remember($cacheKey, now()->addHour(), function () use ($validated, $apiKey, $language, $input) {
-            $response = Http::timeout(3)->connectTimeout(1)->withHeaders([
+        $fetchSuggestions = function () use ($validated, $apiKey, $language, $input): ?array {
+            $response = Http::timeout(5)->connectTimeout(3)->withHeaders([
                 'X-Goog-Api-Key'   => $apiKey,
                 'X-Goog-FieldMask' => 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text',
             ])->acceptJson()->post('https://places.googleapis.com/v1/places:autocomplete', [
@@ -38,8 +40,31 @@ class PlaceSearchController extends Controller
                 'sessionToken'        => $validated['session_token'] ?? null,
             ]);
 
-            return $response->successful() ? $response->json('suggestions', []) : [];
-        });
+            if (! $response->successful()) {
+                Log::warning('Google Places autocomplete failed.', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+
+                return null;
+            }
+
+            return $response->json('suggestions', []);
+        };
+
+        try {
+            $rawSuggestions = Cache::remember($cacheKey, now()->addHour(), $fetchSuggestions);
+        } catch (Throwable $exception) {
+            Log::warning('Places autocomplete cache failed; fetching without cache.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            $rawSuggestions = $fetchSuggestions();
+        }
+
+        if ($rawSuggestions === null) {
+            return response()->json(['message' => 'Address search is unavailable.'], 502);
+        }
 
         $suggestions = collect($rawSuggestions)
             ->map(function (array $suggestion): ?array {
@@ -79,7 +104,7 @@ class PlaceSearchController extends Controller
         $language = ($validated['language'] ?? 'nl') === 'en' ? 'en' : 'nl';
         $cacheKey = 'place-details:'.md5($language.':'.$validated['place_id']);
 
-        $place = Cache::remember($cacheKey, now()->addDay(), function () use ($validated, $apiKey, $language) {
+        $fetchPlace = function () use ($validated, $apiKey, $language): ?array {
             $response = Http::timeout(3)->connectTimeout(1)->withHeaders([
                 'X-Goog-Api-Key' => $apiKey,
                 'X-Goog-FieldMask' => 'id,formattedAddress,location,displayName',
@@ -87,8 +112,27 @@ class PlaceSearchController extends Controller
                 'languageCode' => $language,
             ]);
 
-            return $response->successful() ? $response->json() : null;
-        });
+            if (! $response->successful()) {
+                Log::warning('Google Place details failed.', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+
+                return null;
+            }
+
+            return $response->json();
+        };
+
+        try {
+            $place = Cache::remember($cacheKey, now()->addDay(), $fetchPlace);
+        } catch (Throwable $exception) {
+            Log::warning('Place details cache failed; fetching without cache.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            $place = $fetchPlace();
+        }
 
         if (! $place) {
             return response()->json(['message' => 'Place details could not be loaded.'], 422);

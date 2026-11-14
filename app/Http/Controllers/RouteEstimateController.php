@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\BookingPriceCalculator;
 use App\Services\GoogleRouteEstimator;
 use RuntimeException;
 
 class RouteEstimateController extends Controller
 {
-    public function store(Request $request, GoogleRouteEstimator $routeEstimator): JsonResponse
+    public function store(Request $request, GoogleRouteEstimator $routeEstimator, BookingPriceCalculator $priceCalculator): JsonResponse
     {
         $validated = $request->validate([
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
@@ -19,7 +20,11 @@ class RouteEstimateController extends Controller
         ]);
 
         try {
-            return response()->json($routeEstimator->estimate($validated['origin'], $validated['destination']));
+            $route = $routeEstimator->estimate($validated['origin'], $validated['destination']);
+
+            return response()->json($route + [
+                'quoted_amount' => $priceCalculator->quote($route['distance_km'], $route['duration_min'], $route['distance_meters']),
+            ]);
         } catch (RuntimeException) {
             return response()->json([
                 'message' => 'Route could not be calculated.',

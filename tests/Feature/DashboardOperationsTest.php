@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendBookingNotification;
 use App\Models\Booking;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class DashboardOperationsTest extends TestCase
@@ -21,7 +23,7 @@ class DashboardOperationsTest extends TestCase
         $response = $this->actingAs($user)->get(route('admin.dashboard'));
 
         $response->assertOk();
-        $response->assertSee('Dispatch control room');
+        $response->assertSee('Ritbeheer');
         $response->assertSee('Ritten vandaag');
         $response->assertSee('Gem. ritwaarde');
         $response->assertSee($booking->reference);
@@ -30,7 +32,7 @@ class DashboardOperationsTest extends TestCase
     public function test_booking_dispatch_and_payment_can_be_updated(): void
     {
         $user = User::factory()->create(['role' => 'admin']);
-        $booking = $this->booking();
+        $booking = $this->booking(['booking_status' => 'driver_assigned']);
 
         $this->actingAs($user)
             ->patch(route('dashboard.bookings.dispatch', $booking), [
@@ -49,6 +51,40 @@ class DashboardOperationsTest extends TestCase
         $this->assertSame('driver_en_route', $booking->booking_status);
         $this->assertSame('paid', $booking->payment_status);
         $this->assertNotNull($booking->payment_collected_at);
+    }
+
+    public function test_dispatch_rejects_skipped_and_repeated_statuses(): void
+    {
+        Queue::fake();
+        $user = User::factory()->create(['role' => 'admin']);
+        $booking = $this->booking();
+        $dispatchUrl = route('dashboard.bookings.dispatch', $booking);
+
+        $this->actingAs($user)->patch($dispatchUrl, ['booking_status' => 'completed'])
+            ->assertSessionHasErrors('dispatch');
+        $this->assertSame('new', $booking->fresh()->booking_status);
+        $this->actingAs($user)->patch($dispatchUrl, ['booking_status' => 'driver_assigned'])
+            ->assertRedirect();
+        $this->actingAs($user)->patch($dispatchUrl, ['booking_status' => 'driver_assigned'])
+            ->assertSessionHasErrors('dispatch');
+        $this->assertSame('driver_assigned', $booking->fresh()->booking_status);
+        Queue::assertPushed(SendBookingNotification::class, 1);
+    }
+
+    public function test_search_and_payment_filter_remain_active_in_booking_details(): void
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $booking = $this->booking();
+        $paidBooking = $this->booking(['reference' => 'HUSSO-PAID', 'payment_status' => 'paid']);
+        $filters = ['search' => 'Schiphol', 'filter' => 'payment'];
+
+        $this->actingAs($user)->get(route('admin.bookings.index', $filters))
+            ->assertOk()
+            ->assertSee($booking->reference)
+            ->assertDontSee($paidBooking->reference);
+        $this->actingAs($user)->get(route('admin.bookings.show', ['booking' => $booking] + $filters))
+            ->assertOk()
+            ->assertSee(route('admin.bookings.index', $filters));
     }
 
     private function booking(array $overrides = []): Booking

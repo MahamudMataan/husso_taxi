@@ -33,14 +33,15 @@ class PayLaterBookingController extends Controller
         try {
             $booking = $bookingCreator->create($validated, 'pay_later', 'pay_later');
         } catch (RuntimeException) {
-            return back()->with('payment_error', $language === 'en'
+            return back()->withInput($validated)->with('payment_error', $language === 'en'
                 ? 'The route could not be verified safely. Please choose pickup and destination again.'
                 : 'De route kon niet veilig gecontroleerd worden. Kies ophaal- en bestemmingsplaats opnieuw.');
         }
 
         return redirect(url($language === 'en' ? '/?lang=en#booking' : '/#booking'))
             ->with('payment_success', $language === 'en'
-                ? 'Booking request received ('.$booking->reference.'). We sent your tracking link by email and SMS.'
-                : 'Boekingsaanvraag ontvangen ('.$booking->reference.'). We sturen je trackinglink per e-mail en SMS.');
+                ? 'Booking request received ('.$booking->reference.').'
+                : 'Boekingsaanvraag ontvangen ('.$booking->reference.').')
+            ->with('booking_tracking_url', $booking->trackingUrl());
     }
 }
