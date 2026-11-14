@@ -11,6 +11,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{{ $isEnglish ? 'Contact Husso Taxi | Call or Email' : 'Contact Husso Taxi | Bel of Mail' }}</title>
+        <x-husso.favicon />
         <meta name="description" content="{{ $isEnglish ? 'Call or email Husso Taxi with a question about your ride or booking.' : 'Bel of mail Husso Taxi met een vraag over je rit of boeking.' }}">
         <link rel="canonical" href="{{ $contactUrl }}">
         <link rel="alternate" hreflang="nl" href="{{ route('contact') }}">

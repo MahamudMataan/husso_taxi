@@ -48,6 +48,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ $isEnglish ? 'Book a Taxi in Advance | Husso Taxi' : 'Taxi Vooraf Reserveren | Husso Taxi' }}</title>
+        <x-husso.favicon />
         <meta name="description" content="{{ $description }}">
         <link rel="canonical" href="{{ $homeUrl }}">
         <link rel="alternate" hreflang="nl" href="{{ url('/') }}">

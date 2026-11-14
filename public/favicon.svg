@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <title>Husso Taxi</title>
+    <path fill="#FFE31E" stroke="#050505" stroke-width="2" stroke-linejoin="round" d="M32 3 59 12 55 35C53 46 45 55 32 61 19 55 11 46 9 35L5 12Z"/>
+    <path fill="#050505" d="M32 8 54 15 50 35C48 44 42 51 32 56 22 51 16 44 14 35L10 15Z"/>
+    <path fill="#FDFDFB" d="M20 21 26 20V29L38 26V17L44 16V40L38 41V32L26 35V44L20 45Z"/>
+</svg>

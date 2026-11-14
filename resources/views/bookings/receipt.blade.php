@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
     <title>Ritbon {{ $booking->reference }} · Husso Taxi</title>
+    <x-husso.favicon />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="husso min-h-screen">

@@ -26,6 +26,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex">
         <title>{{ $isEnglish ? 'Track your ride' : 'Volg je rit' }} | Husso Taxi</title>
+        <x-husso.favicon />
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="husso min-h-screen" x-data="rideUpdates(@js(route('bookings.track.state', $booking->tracking_token)), null, @js($isEnglish ? 'en-NL' : 'nl-NL'))">

@@ -6,6 +6,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
         <title>{{ isset($adminShell) ? 'Husso Taxi | Ritbeheer' : config('app.name', 'Laravel') }}</title>
+        <x-husso.favicon />
 
         @unless (isset($adminShell))
             <link rel="preconnect" href="https://fonts.bunny.net">
