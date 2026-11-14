@@ -13,6 +13,7 @@
 /.zed
 /auth.json
 /dist
+/docs/patches/
 /node_modules
 /public/build
 /public/dist
