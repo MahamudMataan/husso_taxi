@@ -38,8 +38,9 @@
             </div>
 
             <div class="mt-6 border-t border-[var(--line)] pt-4">
-                <h2 class="dispatch-heading">Prijsopbouw</h2>
-                <x-husso.fare :booking="$booking" />
+                <h2 class="dispatch-heading">Totaalbedrag</h2>
+                <p class="mt-2 text-xl font-bold">€ {{ number_format($booking->calculatedFare(), 2, ',', '.') }}</p>
+                <x-husso.status class="mt-3" :code="$booking->payment_status" kind="payment" />
             </div>
         </section>
     </main>

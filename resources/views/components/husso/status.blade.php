@@ -3,13 +3,13 @@
 @php
     $statuses = $kind === 'payment' ? [
         'paid' => ['Betaald', 'Paid', 'good'],
-        'pending' => ['Betaling open', 'Payment pending', 'attention'],
+        'pending' => ['Betaling nog niet bevestigd', 'Payment not yet confirmed', 'attention'],
         'pay_later' => ['Later betalen', 'Pay later', 'attention'],
-        'failed' => ['Betaling mislukt', 'Payment failed', 'error'],
-        'checkout_failed' => ['Betaling mislukt', 'Payment failed', 'error'],
-        'checkout_missing' => ['Betaling mislukt', 'Payment failed', 'error'],
-        'canceled' => ['Betaling afgebroken', 'Payment canceled', 'neutral'],
-        'expired' => ['Betaling verlopen', 'Payment expired', 'neutral'],
+        'failed' => ['Betaling niet gelukt', 'Payment failed', 'error'],
+        'checkout_failed' => ['Betaling niet gelukt', 'Payment failed', 'error'],
+        'checkout_missing' => ['Betaling niet gelukt', 'Payment failed', 'error'],
+        'canceled' => ['Betaling niet gelukt', 'Payment failed', 'error'],
+        'expired' => ['Betaling niet gelukt', 'Payment failed', 'error'],
         'refunded' => ['Terugbetaald', 'Refunded', 'neutral'],
     ] : [
         'new' => ['Nieuw', 'New', 'attention'],

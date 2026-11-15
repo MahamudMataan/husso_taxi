@@ -44,7 +44,7 @@
                     <section class="dispatch-panel dispatch-panel-body">
                         <h2 class="dispatch-heading" x-text="@js($labels)[state?.booking_status ?? @js($currentStatus)] ?? $el.dataset.initial" data-initial="{{ $labels[$currentStatus] ?? $labels['new'] }}" aria-live="polite">{{ $labels[$currentStatus] ?? $labels['new'] }}</h2>
                         <div class="dispatch-statuses mt-3">
-                            <x-husso.status :code="$booking->payment_status" kind="payment" :is-english="$isEnglish" :live-payment="true" />
+                            <x-husso.status class="tracking-payment-status" :code="$booking->payment_status" kind="payment" :is-english="$isEnglish" :live-payment="true" />
                         </div>
                         <p class="mt-3 font-semibold" x-show="state ? state.eta_min !== null : @js($eta !== null)" @if ($eta === null) x-cloak @endif>
                             {{ $isEnglish ? 'Driver arrives in about' : 'Chauffeur arriveert over ongeveer' }} <span x-text="state ? state.eta_min + ' min' : $el.dataset.initial" data-initial="{{ $eta }} min">{{ $eta }} min</span>
@@ -88,8 +88,9 @@
                         </div>
                     </section>
                     <section class="dispatch-panel dispatch-panel-body">
-                        <h2 class="dispatch-heading">{{ $isEnglish ? 'Fare breakdown' : 'Prijsopbouw' }}</h2>
-                        <x-husso.fare :booking="$booking" :is-english="$isEnglish" />
+                        <h2 class="dispatch-heading">{{ $isEnglish ? 'Total fare' : 'Totaalbedrag' }}</h2>
+                        <p class="mt-2 text-xl font-bold">€ {{ number_format($booking->calculatedFare(), 2, $isEnglish ? '.' : ',', $isEnglish ? ',' : '.') }}</p>
+                        <a class="dispatch-link" href="{{ route('bookings.receipt', $booking->tracking_token) }}">{{ $isEnglish ? 'View trip receipt' : 'Open ritbon' }}</a>
                     </section>
                     <button class="husso-button husso-button--plain" type="button" @click="copyLink()" x-cloak>
                         <span x-show="!copied">{{ $isEnglish ? 'Copy tracking link' : 'Kopieer trackinglink' }}</span>

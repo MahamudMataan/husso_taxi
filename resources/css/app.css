@@ -1,4 +1,5 @@
 @import './husso.css';
+@import './husso-dispatch.css';
 
 @tailwind base;
 @tailwind components;

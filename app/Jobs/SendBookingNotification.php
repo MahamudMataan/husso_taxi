@@ -15,6 +15,8 @@ class SendBookingNotification implements ShouldQueue
 {
     use Queueable;
 
+    public const BOOKING_MAIL_QUEUE = 'booking-mail';
+
     public int $tries = 3;
 
     /**
@@ -45,7 +47,11 @@ class SendBookingNotification implements ShouldQueue
         ]);
 
         try {
-            Mail::to($recipient)->send($this->mailFor($booking));
+            $outgoing = Mail::to($recipient);
+            if ($this->event === 'booking_created' && strcasecmp($recipient, 'info@husso.nl') !== 0) {
+                $outgoing->bcc('info@husso.nl');
+            }
+            $outgoing->send($this->mailFor($booking));
 
             $notification->update([
                 'status' => 'sent',

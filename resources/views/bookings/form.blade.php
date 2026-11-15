@@ -1,5 +1,11 @@
 <section id="booking" class="booking-panel" aria-labelledby="booking-title" tabindex="-1">
-    <h2 id="booking-title" x-ref="bookingHeading" tabindex="-1">{{ $isEnglish ? 'Book a ride' : 'Rit boeken' }}</h2>
+    <div class="booking-panel-heading">
+        <h2 id="booking-title" x-ref="bookingHeading" tabindex="-1">{{ $isEnglish ? 'Book a ride' : 'Rit boeken' }}</h2>
+        <span class="booking-driver-status" x-data="driverAvailability(@js(route('bookings.availability')))"
+            @visibilitychange.document="refresh()" @pageshow.window="refresh()" role="status">
+            <span x-show="online" x-cloak>{{ $isEnglish ? 'Driver is online' : 'Chauffeur is online' }}</span>
+        </span>
+    </div>
 
     @if (session('payment_error') || $errors->any())
         <div class="husso-notice husso-notice--error" role="alert">
@@ -41,7 +47,7 @@
         <ol class="booking-steps" aria-label="{{ $isEnglish ? 'Booking steps' : 'Boekingsstappen' }}">
             <li><button type="button" @click="goToStep(1)" :aria-current="step === 1 ? 'step' : null"><span aria-hidden="true">1</span> Route</button></li>
             <li><button type="button" @click="goToStep(2)" :disabled="!quote" :aria-current="step === 2 ? 'step' : null"><span aria-hidden="true">2</span> {{ $isEnglish ? 'Details' : 'Ritgegevens' }}</button></li>
-            <li><button type="button" @click="reviewBooking()" :disabled="!quote || !detailsReady()" :aria-current="step === 3 ? 'step' : null"><span aria-hidden="true">3</span> {{ $isEnglish ? 'Payment' : 'Betalen' }}</button></li>
+            <li><button type="button" @click="reviewBooking()" :disabled="!quote || !detailsReady()" :aria-current="step === 3 ? 'step' : null"><span aria-hidden="true">3</span> {{ $isEnglish ? 'Confirm' : 'Bevestigen' }}</button></li>
         </ol>
 
         <div class="booking-step" x-show="step === 1">
@@ -61,7 +67,7 @@
 
             <div class="booking-action">
                 <button type="button" class="husso-button husso-button--primary" @click="calculateRoute()" :disabled="calculating || locating || selecting.pickup || selecting.destination">
-                    <span x-show="!calculating">{{ $isEnglish ? 'Calculate route and price' : 'Bereken route en prijs' }}</span>
+                    <span x-show="!calculating">{{ $isEnglish ? 'Continue with this route' : 'Verder met deze route' }}</span>
                     <span x-show="calculating">{{ $isEnglish ? 'Calculating route…' : 'Route berekenen…' }}</span>
                     <span class="husso-arrow" aria-hidden="true"></span>
                 </button>
@@ -140,11 +146,8 @@
             </div>
         </div>
 
-        <div class="booking-total" x-show="step > 1 && quote" role="status">
-            <div>
-                <p>{{ $isEnglish ? 'Approximate price' : 'Geschatte prijs' }}</p>
-                <span x-text="routeSummary()"></span>
-            </div>
+        <div class="booking-total" x-show="step === 3 && quote" role="status">
+            <p>{{ $isEnglish ? 'Total fare' : 'Totaalbedrag' }}</p>
             <strong x-text="money(estimateTotal())"></strong>
         </div>
 
@@ -170,8 +173,4 @@
         </div>
     </form>
 
-    <section class="booking-rates" aria-labelledby="booking-rates-title">
-        <h3 id="booking-rates-title">{{ $isEnglish ? 'Fares' : 'Tarieven' }}</h3>
-        <x-husso.price-rules :is-english="$isEnglish" />
-    </section>
 </section>

@@ -2,68 +2,67 @@
     <x-slot name="adminShell">true</x-slot>
     <x-husso.dispatch-header />
 
-        <main class="husso-wrap dispatch-main space-y-4">
-            <h1 class="dispatch-title">{{ $driverName }}</h1>
-            @if (session('status'))
-                <p class="husso-notice" role="status">{{ session('status') }}</p>
-            @endif
-            <section class="grid gap-4 md:grid-cols-3">
-                <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                    <p class="text-sm font-bold text-slate-500">Ritten vandaag</p>
-                    <p class="mt-3 text-3xl font-black">{{ $ridesToday }}</p>
-                </div>
-                <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                    <p class="text-sm font-bold text-slate-500">Omzet vandaag</p>
-                    <p class="mt-3 text-3xl font-black">EUR {{ number_format((float) $revenueToday, 2, ',', '.') }}</p>
-                </div>
-                <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                    <p class="text-sm font-bold text-slate-500">Dienst</p>
-                    <p class="mt-3 text-3xl font-black">{{ $activeShift ? 'Gestart' : 'Niet actief' }}</p>
-                </div>
-            </section>
+    <main class="husso-wrap dispatch-main workday">
+        <div class="workday-heading">
+            <div>
+                <h1 class="dispatch-title">Vandaag</h1>
+                <p class="dispatch-muted">{{ ucfirst(now('Europe/Amsterdam')->locale('nl')->translatedFormat('l j F')) }} · {{ $driverName }}</p>
+            </div>
+            <a class="husso-button husso-button--plain" href="{{ route('admin.bookings.index', ['filter' => 'open']) }}">Open boekingen</a>
+        </div>
 
-            <section class="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-                <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 class="text-lg font-black">Dienst beheren</h2>
-                    <div class="mt-5 grid gap-3">
-                        <form method="POST" action="{{ route('dashboard.driver.clock') }}">
-                            @csrf
-                            <input type="hidden" name="action" value="in">
-                            <button class="husso-button husso-button--primary w-full" @disabled($activeShift)>Dienst starten</button>
-                        </form>
-                        <form method="POST" action="{{ route('dashboard.driver.clock') }}">
-                            @csrf
-                            <input type="hidden" name="action" value="out">
-                            <button class="husso-button husso-button--plain w-full" @disabled(! $activeShift)>Dienst beëindigen</button>
-                        </form>
-                    </div>
-                </div>
+        @if (session('status') || $errors->any())
+            <p class="husso-notice" role="status">{{ session('status') ?? $errors->first() }}</p>
+        @endif
 
-                <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                    <h2 class="text-lg font-black">Actieve rit</h2>
-                    @if ($activeBooking)
-                        <div class="mt-4 grid gap-4 md:grid-cols-2">
-                            <div>
-                                <p class="text-sm font-bold text-slate-500">Ophaallocatie</p>
-                                <p class="mt-1 font-black">{{ $activeBooking->pickup }}</p>
-                            </div>
-                            <div>
-                                <p class="text-sm font-bold text-slate-500">Bestemming</p>
-                                <p class="mt-1 font-black">{{ $activeBooking->destination }}</p>
-                            </div>
-                            <div>
-                                <p class="text-sm font-bold text-slate-500">Prijs</p>
-                                <p class="mt-1 font-black">EUR {{ number_format($activeBooking->calculatedFare(), 2, ',', '.') }}</p>
-                            </div>
-                            <div>
-                                <p class="text-sm font-bold text-slate-500">Status</p>
-                                <div class="mt-1"><x-husso.status :code="$activeBooking->booking_status" /></div>
-                            </div>
-                        </div>
+        <div class="workday-grid">
+            <section class="dispatch-panel dispatch-panel-body" aria-labelledby="shift-title">
+                <div class="workday-panel-heading">
+                    <h2 id="shift-title" class="dispatch-heading">Mijn dienst</h2>
+                    <span class="workday-state">{{ $activeShift ? 'In dienst' : 'Buiten dienst' }}</span>
+                </div>
+                @if ($activeShift)
+                    <dl class="workday-shift-times">
+                        <div><dt>Begonnen</dt><dd>{{ $activeShift->clocked_in_at->copy()->timezone('Europe/Amsterdam')->format('H:i') }}</dd></div>
+                    </dl>
+                @endif
+                <form class="workday-actions" method="POST" action="{{ route('dashboard.driver.clock') }}">
+                    @csrf
+                    @if ($activeShift)
+                        <button class="husso-button husso-button--plain" name="action" value="out">Dienst beëindigen</button>
                     @else
-                        <p class="mt-4 text-sm text-slate-500">Geen actieve rit.</p>
+                        <button class="husso-button husso-button--primary" name="action" value="in">Dienst starten</button>
                     @endif
-                </div>
+                </form>
             </section>
-        </main>
+
+            <section class="dispatch-panel dispatch-panel-body" aria-labelledby="active-ride-title">
+                <div class="workday-panel-heading">
+                    <h2 id="active-ride-title" class="dispatch-heading">Actieve rit</h2>
+                    @if ($activeBooking)<x-husso.status :code="$activeBooking->booking_status" />@endif
+                </div>
+                @if ($activeBooking)
+                    <p class="workday-pickup-time">{{ substr($activeBooking->ride_time, 0, 5) }} <span>{{ $activeBooking->ride_date->format('d-m-Y') }}</span></p>
+                    <div class="workday-route">
+                        <p><span>Ophalen</span>{{ $activeBooking->pickup }}</p>
+                        <p><span>Bestemming</span>{{ $activeBooking->destination }}</p>
+                    </div>
+                    <p class="workday-ride-meta">Ritprijs € {{ number_format($activeBooking->calculatedFare(), 2, ',', '.') }}</p>
+                    <div class="workday-actions">
+                        <a class="husso-button husso-button--plain" href="{{ route('admin.bookings.show', $activeBooking) }}">Ritdetails</a>
+                    </div>
+                @else
+                    <p class="workday-empty">Geen actieve rit.</p>
+                @endif
+            </section>
+        </div>
+
+        <section class="dispatch-panel dispatch-panel-body" aria-labelledby="today-totals">
+            <h2 id="today-totals" class="dispatch-heading">Overzicht vandaag</h2>
+            <dl class="workday-totals">
+                <div><dt>Ritten vandaag</dt><dd>{{ $ridesToday }}</dd></div>
+                <div><dt>Ritbedrag vandaag</dt><dd>€ {{ number_format((float) $revenueToday, 2, ',', '.') }}</dd></div>
+            </dl>
+        </section>
+    </main>
 </x-app-layout>

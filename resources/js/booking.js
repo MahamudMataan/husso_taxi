@@ -2,7 +2,6 @@ export function booking(config) {
     const locale = config.language === 'en' ? 'en-NL' : 'nl-NL';
     const priceFormat = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' });
     const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
-    const distanceFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
     return {
         step: 1,
@@ -294,10 +293,6 @@ export function booking(config) {
 
         money(value) {
             return priceFormat.format(value);
-        },
-
-        routeSummary() {
-            return this.quote ? distanceFormat.format(this.quote.distance_km) + ' km · ' + this.quote.duration_min + ' min' : '';
         },
 
         formattedDeparture() {

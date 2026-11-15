@@ -47,6 +47,7 @@ class CustomerCommunicationTest extends TestCase
             ->assertRedirect();
 
         Queue::assertPushed(SendBookingNotification::class, 1);
+        Queue::assertPushedOn(SendBookingNotification::BOOKING_MAIL_QUEUE, SendBookingNotification::class);
         Queue::assertPushed(SendBookingNotification::class, fn (SendBookingNotification $job) => $job->event === 'driver_assigned' && $job->channel === 'email');
     }
 
@@ -84,6 +85,19 @@ class CustomerCommunicationTest extends TestCase
         $this->assertStringContainsString(route('bookings.track', $booking->tracking_token), $html);
         $this->assertStringContainsString(route('bookings.receipt', $booking->tracking_token), $html);
         $this->assertStringContainsString('Open ritbon', $html);
+    }
+
+    public function test_new_booking_email_copies_husso_and_status_updates_link_to_the_receipt(): void
+    {
+        Mail::fake();
+        $booking = $this->booking();
+        (new SendBookingNotification($booking->id, 'booking_created', 'email'))->handle();
+
+        Mail::assertSent(BookingConfirmation::class, fn (BookingConfirmation $mail) => $mail->hasTo($booking->customer_email)
+            && $mail->hasBcc('info@husso.nl'));
+        $statusMail = (new BookingStatusUpdate($booking, 'payment_failed'))->render();
+        $this->assertStringContainsString(route('bookings.track', $booking->tracking_token), $statusMail);
+        $this->assertStringContainsString(route('bookings.receipt', $booking->tracking_token), $statusMail);
     }
 
     private function booking(array $overrides = []): Booking

@@ -10,7 +10,7 @@ class BookingNotificationDispatcher
     public function dispatch(Booking $booking, string $event): void
     {
         foreach (['email'] as $channel) {
-            SendBookingNotification::dispatch($booking->id, $event, $channel)->onQueue('notifications');
+            SendBookingNotification::dispatch($booking->id, $event, $channel)->onQueue(SendBookingNotification::BOOKING_MAIL_QUEUE);
         }
     }
 }

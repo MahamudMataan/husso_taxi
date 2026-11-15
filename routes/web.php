@@ -33,6 +33,11 @@ Route::get('/payments/mollie/return', [MolliePaymentController::class, 'return']
 Route::post('/payments/mollie/webhook', [MolliePaymentController::class, 'webhook'])->name('payments.mollie.webhook');
 
 Route::post('/bookings/pay-later', [PayLaterBookingController::class, 'store'])->name('bookings.pay-later.store');
+Route::get('/bookings/availability', function (DispatchMetrics $metrics): JsonResponse {
+    return response()->json(['driver_online' => $metrics->activeShift() !== null])
+        ->header('Cache-Control', 'private, no-store');
+})->middleware('throttle:60,1')->name('bookings.availability');
+
 Route::post('/route-estimate', [RouteEstimateController::class, 'store'])->name('route-estimate.store');
 Route::post('/places/autocomplete', [PlaceSearchController::class, 'autocomplete'])->name('places.autocomplete');
 Route::post('/places/details', [PlaceSearchController::class, 'details'])->name('places.details');
@@ -40,9 +45,9 @@ Route::post('/places/details', [PlaceSearchController::class, 'details'])->name(
 Route::get('/track/{token}', function (string $token) {
     $booking = Booking::where('tracking_token', $token)->firstOrFail();
 
-    return view('bookings.track', [
+    return response()->view('bookings.track', [
         'booking' => $booking,
-    ]);
+    ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
 })->name('bookings.track');
 
 Route::get('/track/{token}/state', function (string $token): JsonResponse {
@@ -63,7 +68,7 @@ Route::get('/track/{token}/state', function (string $token): JsonResponse {
             'latitude' => $booking->driver_latitude ?: $booking->pickup_latitude,
             'longitude' => $booking->driver_longitude ?: $booking->pickup_longitude,
         ],
-    ]);
+    ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
 })->name('bookings.track.state');
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -170,9 +175,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::get('/receipt/{token}', function (string $token) {
     $booking = Booking::where('tracking_token', $token)->firstOrFail();
 
-    return view('bookings.receipt', [
+    return response()->view('bookings.receipt', [
         'booking' => $booking,
-    ]);
+    ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
 })->name('bookings.receipt');
 
 Route::redirect('/dashboard', '/admin')->middleware(['auth', 'verified'])->name('dashboard');

@@ -1,9 +1,13 @@
 <header class="dispatch-header">
     <div class="husso-wrap dispatch-header-inner">
-        <x-husso.brand :href="route('admin.dashboard')" />
+        <x-husso.brand class="dispatch-brand" :href="route('driver.dashboard')" />
         <nav class="dispatch-nav" aria-label="Ritbeheer">
-            @foreach (['admin.dashboard' => 'Overzicht', 'admin.bookings.index' => 'Boekingen', 'admin.live' => 'Live', 'driver.dashboard' => 'Chauffeur'] as $route => $label)
-                <a href="{{ route($route) }}" @if (request()->routeIs($route)) aria-current="page" @endif>{{ $label }}</a>
+            @foreach (['driver.dashboard' => 'Vandaag', 'admin.bookings.index' => 'Boekingen', 'admin.live' => 'Live', 'admin.dashboard' => 'Overzicht'] as $route => $label)
+                @php
+                    $isCurrent = request()->routeIs($route)
+                        || ($route === 'admin.bookings.index' && request()->routeIs('admin.bookings.show'));
+                @endphp
+                <a href="{{ route($route) }}" @if ($isCurrent) aria-current="page" @endif>{{ $label }}</a>
             @endforeach
         </nav>
         <form class="dispatch-signout" method="POST" action="{{ route('logout') }}">

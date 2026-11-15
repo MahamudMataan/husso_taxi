@@ -2,7 +2,7 @@
 
 ## Live sinds 14 november 2026
 
-Hostinger draait release `0e4654e` met het ontwerp, favicon en de nieuwe tarieven. Op de live site zijn de openbare pagina’s, bestanden, inlogvereisten en één prijsindicatie gecontroleerd. De iDEAL-flow, betalen achteraf, ritbon en ingelogde beheerpagina’s zijn vooraf getest op Hostinger met een tijdelijke database en nagebootste diensten. Tijdens de uitrol zijn geen echte boekingen of betalingen gestart.
+Hostinger draait release `0e4654e` met het ontwerp, favicon en de nieuwe tarieven. Op 15 november zijn de bijgewerkte boekings-, betaal- en ritvolgerbestanden gepubliceerd. Op de live site zijn de openbare pagina’s, bestanden, inlogvereisten en één prijsindicatie gecontroleerd. De iDEAL-flow, betalen achteraf, ritbon en ingelogde beheerpagina’s zijn vooraf getest op Hostinger met een tijdelijke database en nagebootste diensten. Tijdens de uitrol zijn geen echte boekingen of betalingen gestart.
 
 De uitrol heeft 46 bestanden vervangen of toegevoegd. De bestaande bestanden zijn privé geback-upt. De productie-`.env` en `public_html/index.php` zijn geverifieerd en er zijn geen databasemigraties uitgevoerd.
 
@@ -11,6 +11,8 @@ De uitrol heeft 46 bestanden vervangen of toegevoegd. De bestaande bestanden zij
 - Het mobiele en desktopontwerp vernieuwt de boeking, contactpagina, tracking, login, het ritbeheer en het chauffeursdashboard. De Schipholfoto is van [Christo, CC0](https://commons.wikimedia.org/wiki/File:Amsterdam,_Airport,_Schiphol,_25.jpg). De fontlicenties staan bij de fonts in `public/fonts/`.
 - Het favicon gebruikt het schild van het Husso-logo. De ICO, SVG en Apple-touch-icon staan in `public/`. Openbare pagina’s en medewerkerspagina’s gebruiken dezelfde Blade-component. Het favicon is al uitgerold op Hostinger.
 - De instap is één keer €4 per rit. De rijtijd kost €0,52 per minuut. Tot en met 55 km geldt €3,17/km. Boven 55 km geldt €2,50/km voor de hele rit. De exacte routeafstand bepaalt de tariefgroep. De ritprijs gebruikt de afstand op één decimaal en de rijtijd afgerond op hele minuten, zoals de boeking die bewaart. Daardoor kan een rit net boven 55 km goedkoper zijn. Eerdere boekingen behouden hun opgeslagen bedragen en tarieven.
+- Betaalstatussen en de privéritvolger zijn bijgewerkt; foutieve betalingen zijn rood. Boekingsmails gebruiken de eigen `booking-mail`-wachtrij en bevatten een ritbon en volglink. De live Hostinger-mailtaak verwerkt alleen die wachtrij.
+- De Hostinger-appwachtwoordstap is nog niet uitgevoerd. Geen geslaagde e-mail is bevestigd. Zie [betalingen en Hostinger Mail](Husso-Taxi-betaling-en-Hostinger-mail.md) voor de veilige activering. De productie-`.env` en mailgeheimen staan niet in deze repository.
 
 ## GitHub en patches
 

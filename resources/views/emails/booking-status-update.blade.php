@@ -1,6 +1,7 @@
 @php
     $isEnglish = $booking->language === 'en';
     $trackingUrl = $booking->trackingUrl();
+    $receiptUrl = route('bookings.receipt', $booking->tracking_token);
     $labels = [
         'booking_created' => [
             'nl' => ['Je aanvraag is ontvangen', 'We hebben je rit ontvangen en controleren de planning. Je kunt de status live volgen via je trackinglink.'],
@@ -46,6 +47,9 @@
     <p style="margin: 24px 0;">
         <a href="{{ $trackingUrl }}" style="display: inline-block; background: #020617; color: #ffffff; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-weight: bold;">
             {{ $isEnglish ? 'Track my ride' : 'Volg mijn rit' }}
+        </a>
+        <a href="{{ $receiptUrl }}" style="display: inline-block; margin-left: 8px; background: #facc15; color: #020617; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+            {{ $isEnglish ? 'Open receipt' : 'Open ritbon' }}
         </a>
     </p>
 

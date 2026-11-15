@@ -10,9 +10,9 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{{ $isEnglish ? 'Contact Husso Taxi | Call or Email' : 'Contact Husso Taxi | Bel of Mail' }}</title>
+        <title>{{ $isEnglish ? 'Contact Husso Taxi | WhatsApp, Phone and Email' : 'Contact Husso Taxi | WhatsApp, Telefoon en E-mail' }}</title>
         <x-husso.favicon />
-        <meta name="description" content="{{ $isEnglish ? 'Call or email Husso Taxi with a question about your ride or booking.' : 'Bel of mail Husso Taxi met een vraag over je rit of boeking.' }}">
+        <meta name="description" content="{{ $isEnglish ? 'Contact Husso Taxi by WhatsApp, phone or email with a question about your ride or booking.' : 'Neem via WhatsApp, telefoon of e-mail contact op met Husso Taxi over je rit of boeking.' }}">
         <link rel="canonical" href="{{ $contactUrl }}">
         <link rel="alternate" hreflang="nl" href="{{ route('contact') }}">
         <link rel="alternate" hreflang="en" href="{{ route('contact', ['lang' => 'en']) }}">
@@ -24,15 +24,19 @@
             <div class="contact-intro">
                 <h1>{{ $isEnglish ? 'Questions about your ride?' : 'Een vraag over je rit?' }}</h1>
                 <p>{{ $isEnglish
-                    ? 'Call us if you need a taxi soon. For a question about a booking, include your reference when you call or email.'
-                    : 'Bel ons als je snel een taxi nodig hebt. Gaat je vraag over een boeking? Houd dan je ritnummer bij de hand of zet het in je mail.' }}</p>
+                    ? 'Call us if you need a taxi soon. If you have a question about a booking, please include your booking reference.'
+                    : 'Bel ons als je snel een taxi nodig hebt. Gaat je vraag over een boeking? Vermeld dan je ritnummer.' }}</p>
             </div>
             <section class="contact-options" aria-labelledby="contact-title">
                 <h2 id="contact-title">Contact</h2>
                 <dl>
                     <div>
+                        <dt>WhatsApp</dt>
+                        <dd><x-husso.whatsapp class="husso-button husso-button--primary" :show-number="true" /></dd>
+                    </div>
+                    <div>
                         <dt>{{ $isEnglish ? 'Phone' : 'Telefoon' }}</dt>
-                        <dd><a class="husso-button husso-button--primary" href="tel:+31686463268">+31 6 8646 3268</a></dd>
+                        <dd><a href="tel:+31686463268" aria-label="{{ $isEnglish ? 'Call +31 6 8646 3268' : 'Bel +31 6 8646 3268' }}">+31 6 8646 3268</a></dd>
                     </div>
                     <div>
                         <dt>E-mail</dt>
@@ -44,5 +48,6 @@
             </section>
         </main>
         <x-husso.footer :is-english="$isEnglish" :home-url="$homeUrl" />
+        <x-husso.whatsapp :icon-only="true" class="husso-quick-chat" />
     </body>
 </html>

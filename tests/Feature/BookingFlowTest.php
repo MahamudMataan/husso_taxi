@@ -22,15 +22,16 @@ class BookingFlowTest extends TestCase
         $response->assertOk();
         $response->assertSee('Volledige naam');
         $response->assertSee('E-mail voor bevestiging');
-        $response->assertSee('Geschatte prijs');
-        $response->assertSee('Boven 55 km (hele rit)');
-        $response->assertSee('€ 2,50/km');
-        $response->assertSee('Bereken route en prijs');
+        $response->assertSee('Totaalbedrag');
+        $response->assertSee('x-show="step === 3 && quote"', false);
+        $response->assertDontSee('Boven 55 km (hele rit)');
+        $response->assertDontSee('€ 2,50/km');
+        $response->assertSee('Verder met deze route');
         $response->assertSee('Boeking controleren');
         $response->assertSee('Boekingsoverzicht');
         $response->assertSee('Boek, betaal later');
         $response->assertSee('Betaal nu met iDEAL');
-        $response->assertSee('Reserveer je taxi vooraf.');
+        $response->assertSee('Naar Schiphol in alle rust.');
         $response->assertSee('Gebruik mijn huidige locatie');
         $response->assertSee('Cookies en locatie');
         $response->assertSee('/places/autocomplete');
@@ -59,13 +60,13 @@ class BookingFlowTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Full name');
-        $response->assertSee('Approximate price');
-        $response->assertSee('Over 55 km (entire ride)');
-        $response->assertSee('€ 2.50/km');
-        $response->assertSee('Calculate route and price');
+        $response->assertSee('Total fare');
+        $response->assertDontSee('Over 55 km (entire ride)');
+        $response->assertDontSee('€ 2.50/km');
+        $response->assertSee('Continue with this route');
         $response->assertSee('Book, pay later');
         $response->assertSee('Pay now with iDEAL');
-        $response->assertSee('Book your taxi in advance.');
+        $response->assertSee('To Schiphol in comfort.');
         $response->assertSee('Our taxi services');
         $response->assertDontSee('Distance km');
         $response->assertDontSee('Per minute');
@@ -202,7 +203,7 @@ class BookingFlowTest extends TestCase
         $response->assertSessionHasErrors('customer_name');
     }
 
-    public function test_pay_later_booking_redirects_back_with_success(): void
+    public function test_pay_later_booking_redirects_directly_to_tracking(): void
     {
         Queue::fake();
 
@@ -221,9 +222,9 @@ class BookingFlowTest extends TestCase
             ->from('/#booking')
             ->post(route('bookings.pay-later.store'), $this->bookingPayload());
 
-        $response->assertRedirect('/#booking');
-        $response->assertSessionHas('payment_success');
-        $response->assertSessionHas('booking_tracking_url');
+        $booking = Booking::firstOrFail();
+        $response->assertRedirect($booking->trackingUrl());
+        $this->get($booking->trackingUrl())->assertOk()->assertSee('Later betalen');
 
         $this->assertDatabaseHas('bookings', [
             'customer_email' => 'klant@example.nl',
@@ -273,6 +274,7 @@ class BookingFlowTest extends TestCase
                     ],
                 ],
             ], 201),
+            'api.mollie.com/v2/payments/tr_test_payment' => Http::response(['status' => 'open']),
         ]);
 
         $response = $this
@@ -310,10 +312,71 @@ class BookingFlowTest extends TestCase
 
         $booking = Booking::firstOrFail();
         $this->get(route('payments.mollie.return', ['booking' => $booking->reference]))
-            ->assertRedirect(url('/#booking'))
-            ->assertSessionHas('booking_tracking_url', $booking->trackingUrl())
+            ->assertRedirect($booking->trackingUrl())
             ->assertSessionMissing('payment_success');
         $this->assertSame('pending', $booking->fresh()->payment_status);
+    }
+
+    public function test_a_signed_mollie_return_without_a_session_shows_the_failed_payment_on_tracking(): void
+    {
+        config(['services.mollie.key' => 'test_fake_key', 'services.google_maps.key' => 'fake-google-key']);
+        Queue::fake();
+        Http::preventStrayRequests();
+        Http::fake([
+            'routes.googleapis.com/directions/v2:computeRoutes' => Http::response([
+                'routes' => [['distanceMeters' => 12340, 'duration' => '1560s']],
+            ]),
+            'api.mollie.com/v2/payments' => Http::response([
+                'id' => 'tr_failed_return',
+                '_links' => ['checkout' => ['href' => 'https://www.mollie.com/checkout/failure-test']],
+            ], 201),
+            'api.mollie.com/v2/payments/tr_failed_return' => Http::response(['status' => 'canceled']),
+        ]);
+        $this->post(route('payments.mollie.store'), $this->bookingPayload())->assertRedirect();
+        $booking = Booking::firstOrFail();
+        [$checkout] = Http::recorded(fn ($request) => $request->url() === 'https://api.mollie.com/v2/payments')->sole();
+        $returnUrl = $checkout->data()['redirectUrl'];
+        $this->assertStringContainsString('signature=', $returnUrl);
+        $this->assertStringNotContainsString($booking->tracking_token, $returnUrl);
+
+        $this->withSession(['mollie_checkout' => []]);
+        $this->get(route('payments.mollie.return', ['booking' => $booking->reference]))
+            ->assertRedirect(url('/#booking'))
+            ->assertSessionMissing('booking_tracking_url');
+        $this->assertSame('pending', $booking->refresh()->payment_status);
+
+        $this->get($returnUrl)->assertRedirect($booking->trackingUrl());
+        $this->assertSame('canceled', $booking->refresh()->payment_status);
+        $this->get($booking->trackingUrl())->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertSee('>Betaling niet gelukt</span>', false)
+            ->assertSee('data-tone="error"', false)
+            ->assertSee('Open ritbon');
+
+        $this->get($returnUrl)->assertRedirect($booking->trackingUrl());
+        Queue::assertPushed(SendBookingNotification::class, 2);
+        Queue::assertPushed(SendBookingNotification::class, fn ($job) => $job->event === 'payment_failed');
+    }
+
+    public function test_a_checkout_that_cannot_start_opens_the_existing_bookings_tracking_page(): void
+    {
+        config(['services.mollie.key' => 'test_fake_key', 'services.google_maps.key' => 'fake-google-key']);
+        Queue::fake();
+        Http::preventStrayRequests();
+        Http::fake([
+            'routes.googleapis.com/directions/v2:computeRoutes' => Http::response([
+                'routes' => [['distanceMeters' => 12340, 'duration' => '1560s']],
+            ]),
+            'api.mollie.com/v2/payments' => Http::response([], 503),
+        ]);
+
+        $response = $this->post(route('payments.mollie.store'), $this->bookingPayload());
+        $booking = Booking::firstOrFail();
+        $this->assertSame('checkout_failed', $booking->payment_status);
+        $response->assertRedirect($booking->trackingUrl());
+        $this->get($booking->trackingUrl())->assertOk()->assertSee('>Betaling niet gelukt</span>', false);
+        Queue::assertPushed(SendBookingNotification::class, fn ($job) => $job->event === 'payment_failed');
     }
 
     public function test_mollie_webhook_only_updates_each_payment_status_once(): void

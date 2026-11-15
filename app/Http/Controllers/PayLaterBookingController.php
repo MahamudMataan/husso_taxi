@@ -38,10 +38,9 @@ class PayLaterBookingController extends Controller
                 : 'De route kon niet veilig gecontroleerd worden. Kies ophaal- en bestemmingsplaats opnieuw.');
         }
 
-        return redirect(url($language === 'en' ? '/?lang=en#booking' : '/#booking'))
-            ->with('payment_success', $language === 'en'
-                ? 'Booking request received ('.$booking->reference.').'
-                : 'Boekingsaanvraag ontvangen ('.$booking->reference.').')
-            ->with('booking_tracking_url', $booking->trackingUrl());
+        return redirect()->to($booking->trackingUrl(), 302, [
+            'Cache-Control' => 'private, no-store',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
     }
 }
