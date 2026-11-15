@@ -41,6 +41,7 @@ return [
 
     'mollie' => [
         'key' => env('MOLLIE_API_KEY'),
+        'test_amount' => env('MOLLIE_TEST_AMOUNT'),
     ],
 
     'booking' => [

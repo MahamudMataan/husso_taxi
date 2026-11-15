@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreRideRequest;
 use App\Models\Booking;
 use App\Services\BookingCreator;
 use App\Services\BookingNotificationDispatcher;
@@ -13,80 +14,87 @@ use RuntimeException;
 
 class MolliePaymentController extends Controller
 {
-    public function store(Request $request, BookingCreator $bookingCreator, BookingNotificationDispatcher $notifications): RedirectResponse
+    public function store(StoreRideRequest $request, BookingCreator $bookingCreator, BookingNotificationDispatcher $notifications): RedirectResponse
     {
-        $validated = $request->validate([
-            'language'              => ['nullable', 'in:nl,en'],
-            'customer_name'         => ['required', 'string', 'max:120'],
-            'customer_email'        => ['required', 'email', 'max:255'],
-            'phone'                 => ['required', 'string', 'max:40'],
-            'pickup'                => ['required', 'string', 'max:255'],
-            'pickup_latitude'       => ['required', 'numeric', 'between:-90,90'],
-            'pickup_longitude'      => ['required', 'numeric', 'between:-180,180'],
-            'destination'           => ['required', 'string', 'max:255'],
-            'destination_latitude'  => ['required', 'numeric', 'between:-90,90'],
-            'destination_longitude' => ['required', 'numeric', 'between:-180,180'],
-            'ride_date'             => ['required', 'date'],
-            'ride_time'             => ['required', 'date_format:H:i'],
-            'passengers'            => ['required', 'string', 'max:10'],
-            'ride_type'             => ['required', 'string', 'max:40'],
-        ]);
+        $validated = $request->bookingData();
 
         $apiKey = config('services.mollie.key');
+        $language = $validated['language'] ?? 'nl';
 
         if (! $apiKey) {
-            return back()->with('payment_error', 'Mollie API key is not configured yet.');
+            return back()->withInput($request->validated())->with('payment_error', $language === 'en'
+                ? 'Online payment is unavailable. You can choose to pay later.'
+                : 'Online betalen is tijdelijk niet beschikbaar. Je kunt kiezen voor later betalen.');
         }
 
-        $language    = $validated['language'] ?? 'nl';
         $description = $language === 'en' ? 'Husso Taxi booking' : 'Husso Taxi boeking';
 
         try {
             $booking = $bookingCreator->create($validated, 'ideal', 'pending');
         } catch (RuntimeException) {
-            return back()->with('payment_error', $language === 'en'
+            return back()->withInput($request->validated())->with('payment_error', $language === 'en'
                 ? 'The route could not be verified safely. Please choose pickup and destination again.'
                 : 'De route kon niet veilig gecontroleerd worden. Kies ophaal- en bestemmingsplaats opnieuw.');
         }
 
+        $sessionKey = 'mollie_checkout_url.'.$booking->reference;
+        if ($booking->mollie_payment_id) {
+            $existingCheckout = $request->session()->get($sessionKey);
+
+            return $existingCheckout && $booking->payment_status === 'pending'
+                ? redirect()->away($existingCheckout)
+                : redirect($booking->trackingUrl());
+        }
+
+        $testAmount = str_starts_with($apiKey, 'test_') ? config('services.mollie.test_amount') : null;
+        $paymentAmount = (float) ($testAmount ?: $booking->quoted_amount);
+        $paymentAmount = max($paymentAmount, 0.01);
+
         $response = Http::withToken($apiKey)
+            ->withHeaders(['Idempotency-Key' => 'husso-'.$booking->reference])
             ->acceptJson()
             ->post('https://api.mollie.com/v2/payments', [
                 'amount'      => [
                     'currency' => 'EUR',
-                    'value'    => number_format((float) $booking->quoted_amount, 2, '.', ''),
+                    'value'    => number_format($paymentAmount, 2, '.', ''),
                 ],
                 'description' => $description,
                 'method'      => 'ideal',
-                'redirectUrl' => route('payments.mollie.return', ['lang' => $language]),
+                'redirectUrl' => route('payments.mollie.return', ['lang' => $language, 'booking' => $booking->reference]),
                 'webhookUrl'  => route('payments.mollie.webhook'),
                 'metadata'    => [
                     'booking_id' => $booking->id,
                     'reference' => $booking->reference,
                     'language'              => $language,
-                    'customer_name'         => $validated['customer_name'],
-                    'customer_email'        => $validated['customer_email'],
-                    'phone'                 => $validated['phone'],
-                    'pickup'                => $validated['pickup'],
-                    'pickup_latitude'       => $validated['pickup_latitude'],
-                    'pickup_longitude'      => $validated['pickup_longitude'],
-                    'destination'           => $validated['destination'],
-                    'destination_latitude'  => $validated['destination_latitude'],
-                    'destination_longitude' => $validated['destination_longitude'],
+                    'customer_name'         => $booking->customer_name,
+                    'customer_email'        => $booking->customer_email,
+                    'phone'                 => $booking->phone,
+                    'pickup'                => $booking->pickup,
+                    'pickup_latitude'       => $booking->pickup_latitude,
+                    'pickup_longitude'      => $booking->pickup_longitude,
+                    'destination'           => $booking->destination,
+                    'destination_latitude'  => $booking->destination_latitude,
+                    'destination_longitude' => $booking->destination_longitude,
                     'distance_km'           => $booking->distance_km,
                     'duration_min'          => $booking->duration_min,
-                    'ride_date'             => $validated['ride_date'],
-                    'ride_time'             => $validated['ride_time'],
-                    'passengers'            => $validated['passengers'],
-                    'ride_type'             => $validated['ride_type'],
+                    'ride_date'             => $booking->ride_date->format('Y-m-d'),
+                    'ride_time'             => substr($booking->ride_time, 0, 5),
+                    'passengers'            => $booking->passengers,
+                    'ride_type'             => $booking->ride_type,
                 ],
             ]);
 
         if (! $response->successful()) {
+            Log::warning('Mollie payment creation failed.', [
+                'status' => $response->status(),
+            ]);
+
             $booking->update(['payment_status' => 'checkout_failed']);
             $notifications->dispatch($booking->refresh(), 'payment_failed');
 
-            return back()->with('payment_error', 'Mollie payment could not be created.');
+            return back()->with('payment_error', $language === 'en'
+                ? 'Online payment could not be started. Please try again or choose to pay later.'
+                : 'Online betalen kon niet worden gestart. Probeer opnieuw of kies voor later betalen.');
         }
 
         $checkoutUrl = $response->json('_links.checkout.href');
@@ -99,7 +107,9 @@ class MolliePaymentController extends Controller
             return back()->with('payment_error', 'Mollie checkout link is missing.');
         }
 
-        $booking->update(['mollie_payment_id' => $mollieId]);
+        $booking->update(['mollie_payment_id' => $mollieId, 'payment_status' => 'pending']);
+        $request->session()->put('mollie_checkout.'.$booking->reference, $booking->id);
+        $request->session()->put($sessionKey, $checkoutUrl);
 
         return redirect()->away($checkoutUrl);
     }
@@ -132,15 +142,16 @@ class MolliePaymentController extends Controller
             return response('', 200);
         }
 
-        if ($mollieStatus === 'paid' && $booking->payment_status !== 'paid') {
-            $booking->update([
-                'payment_status'         => 'paid',
-            ]);
+        $checkout = Booking::whereKey($booking->id)->whereNotIn('payment_status', ['paid', 'refunded']);
 
-            $notifications->dispatch($booking->refresh(), 'booking_accepted');
-        } elseif (in_array($mollieStatus, ['expired', 'canceled', 'failed'])) {
-            $booking->update(['payment_status' => $mollieStatus]);
-            $notifications->dispatch($booking->refresh(), 'payment_failed');
+        if ($mollieStatus === 'paid') {
+            if ($checkout->update(['payment_status' => 'paid', 'payment_collected_at' => now()])) {
+                $notifications->dispatch($booking->refresh(), 'payment_received');
+            }
+        } elseif (in_array($mollieStatus, ['expired', 'canceled', 'failed'], true)) {
+            if ($checkout->where('payment_status', '!=', $mollieStatus)->update(['payment_status' => $mollieStatus])) {
+                $notifications->dispatch($booking->refresh(), 'payment_failed');
+            }
         }
 
         return response('', 200);
@@ -148,11 +159,22 @@ class MolliePaymentController extends Controller
 
     public function return(Request $request): RedirectResponse
     {
-        $language = $request->query('lang') === 'en' ? 'en' : null;
+        $isEnglish = $request->query('lang') === 'en';
+        $reference = $request->query('booking');
+        $checkouts = $request->session()->get('mollie_checkout', []);
+        $booking = is_string($reference) && isset($checkouts[$reference])
+            ? Booking::find($checkouts[$reference])
+            : null;
+        $redirect = redirect(url($isEnglish ? '/?lang=en#booking' : '/#booking'))
+            ->with('payment_notice', $isEnglish ? 'You are back from iDEAL.' : 'Je bent terug van iDEAL.');
 
-        return redirect(url($language ? '/?lang=en#booking' : '/#booking'))
-            ->with('payment_success', $language === 'en'
-                ? 'Payment completed. You will receive a confirmation email shortly.'
-                : 'Betaling geslaagd. Je ontvangt zo een bevestigingsmail.');
+        if ($booking) {
+            $redirect->with('booking_tracking_url', $booking->trackingUrl())
+                ->with('payment_notice', $isEnglish
+                    ? 'You are back from iDEAL. Check the current payment status on your tracking page.'
+                    : 'Je bent terug van iDEAL. Bekijk de actuele betaalstatus op je ritpagina.');
+        }
+
+        return $redirect;
     }
 }

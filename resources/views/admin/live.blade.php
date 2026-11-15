@@ -1,93 +1,58 @@
 <x-app-layout>
     <x-slot name="adminShell">true</x-slot>
+    <x-husso.dispatch-header />
 
     @php
-        $statusColors = [
-            'new' => 'bg-yellow-400 text-slate-950',
-            'driver_assigned' => 'bg-blue-500 text-white',
-            'driver_en_route' => 'bg-blue-500 text-white',
-            'arrived' => 'bg-green-500 text-white',
-            'picked_up' => 'bg-green-500 text-white',
-            'completed' => 'bg-green-600 text-white',
-            'failed' => 'bg-red-500 text-white',
-            'canceled' => 'bg-slate-400 text-white',
-            'rejected' => 'bg-slate-400 text-white',
+        $centerLat = $booking?->pickup_latitude;
+        $centerLng = $booking?->pickup_longitude;
+        $liveLabels = [
+            'new' => 'Nieuw',
+            'driver_assigned' => 'Toegewezen',
+            'driver_en_route' => 'Onderweg naar klant',
+            'arrived' => 'Aangekomen',
+            'picked_up' => 'Rit bezig',
         ];
-        $centerLat = $booking?->driver_latitude ?: ($booking?->pickup_latitude ?: '52.3676');
-        $centerLng = $booking?->driver_longitude ?: ($booking?->pickup_longitude ?: '4.9041');
     @endphp
 
-    <div class="min-h-screen bg-slate-950 text-white" x-data="{
-        state: null,
-        init() {
-            this.fetchState();
-            setInterval(() => this.fetchState(), 5000);
-        },
-        async fetchState() {
-            const response = await fetch('{{ route('admin.live.state') }}', { headers: { Accept: 'application/json' } });
-            this.state = await response.json();
-        }
-    }">
-        <header class="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-            <div>
-                <p class="text-xs font-black uppercase tracking-wide text-yellow-300">Live dispatch</p>
-                <h1 class="text-2xl font-black">Control room</h1>
-            </div>
-            <nav class="flex flex-wrap gap-2 text-sm font-black">
-                <a class="rounded-lg bg-yellow-400 px-4 py-2 text-slate-950" href="{{ route('admin.dashboard') }}">Dashboard</a>
-                <a class="rounded-lg border border-white/20 px-4 py-2 text-white" href="{{ route('admin.bookings.index') }}">Boekingen</a>
-            </nav>
-        </header>
+    <main class="husso-wrap dispatch-main" x-data="rideUpdates(@js(route('admin.live.state')), @js($booking?->id))">
+        <h1 class="dispatch-title">Live ritoverzicht</h1>
+        <p class="dispatch-muted mb-3" x-show="updatedAt" x-cloak>Bijgewerkt om <span x-text="updatedAt"></span></p>
+        <p class="husso-notice husso-notice--error" role="status" x-show="offline" x-cloak>De laatste update is niet opgehaald. We proberen het opnieuw.</p>
+        <p class="husso-notice" role="status" x-show="changedRide" x-cloak>De rit in dit overzicht is gewijzigd. <a href="{{ route('admin.live') }}">Vernieuw het overzicht</a></p>
 
-        <main class="grid min-h-[calc(100vh-73px)] gap-0 lg:grid-cols-[minmax(0,1fr)_420px]">
-            <section class="relative min-h-[520px] bg-slate-800">
-                @if ($booking)
-                    <iframe class="h-full min-h-[520px] w-full opacity-90" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://www.openstreetmap.org/export/embed.html?bbox={{ (float) $centerLng - 0.08 }}%2C{{ (float) $centerLat - 0.05 }}%2C{{ (float) $centerLng + 0.08 }}%2C{{ (float) $centerLat + 0.05 }}&layer=mapnik&marker={{ $centerLat }}%2C{{ $centerLng }}"></iframe>
+        <div class="dispatch-grid">
+            <section class="dispatch-panel dispatch-panel-body">
+                <h2 class="dispatch-heading">Ophaallocatie</h2>
+                @if ($centerLat !== null && $centerLng !== null)
+                    <iframe class="dispatch-map mt-3" title="Kaart van de ophaallocatie" loading="lazy" referrerpolicy="no-referrer"
+                        src="https://www.openstreetmap.org/export/embed.html?bbox={{ (float) $centerLng - 0.08 }}%2C{{ (float) $centerLat - 0.05 }}%2C{{ (float) $centerLng + 0.08 }}%2C{{ (float) $centerLat + 0.05 }}&layer=mapnik&marker={{ $centerLat }}%2C{{ $centerLng }}"></iframe>
                 @else
-                    <div class="flex h-full min-h-[520px] items-center justify-center text-slate-400">Geen actieve rit.</div>
+                    <p class="dispatch-muted mt-3">Geen locatie beschikbaar voor dit overzicht.</p>
                 @endif
-                <div class="absolute left-4 top-4 rounded-lg bg-slate-950/90 p-4 shadow-2xl">
-                    <p class="text-xs font-black uppercase text-yellow-300">Route flow</p>
-                    <p class="mt-2 text-lg font-black">Driver -> Pickup -> Destination</p>
-                    <p class="mt-1 text-sm text-slate-300">Polling elke 5 seconden</p>
-                </div>
             </section>
 
-            <aside class="space-y-5 overflow-y-auto border-l border-white/10 bg-slate-950 p-5">
-                <div class="rounded-lg border border-white/10 bg-white/5 p-4">
-                    <p class="text-sm font-bold text-slate-300">Chauffeur</p>
-                    <p class="mt-2 text-2xl font-black" x-text="state?.driver_online ? 'Online' : '{{ $stats['driver_online'] ? 'Online' : 'Offline' }}'"></p>
-                </div>
-
-                @if ($booking)
-                    <div class="rounded-lg border border-white/10 bg-white/5 p-4">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <p class="text-sm font-bold text-slate-300">Actieve boeking</p>
-                                <h2 class="mt-1 text-xl font-black">{{ $booking->reference }}</h2>
-                            </div>
-                            <span class="rounded-full px-3 py-1 text-xs font-black {{ $statusColors[$booking->booking_status] ?? 'bg-slate-500 text-white' }}">{{ str_replace('_', ' ', $booking->booking_status) }}</span>
+            <aside class="dispatch-stack">
+                <section class="dispatch-panel dispatch-panel-body">
+                    <h2 class="dispatch-heading">Chauffeur</h2>
+                    <p class="mt-2 text-sm font-semibold" x-text="state ? (state.driver_online ? 'Online' : 'Offline') : $el.dataset.initial" data-initial="{{ $stats['driver_online'] ? 'Online' : 'Offline' }}">{{ $stats['driver_online'] ? 'Online' : 'Offline' }}</p>
+                    <a class="dispatch-link" x-show="sameRide && state.active_booking.driver_location && !offline" x-cloak
+                        :href="driverMapUrl(state?.active_booking?.driver_location)" target="_blank" rel="noopener noreferrer">Bekijk chauffeur op de kaart</a>
+                </section>
+                <section class="dispatch-panel dispatch-panel-body">
+                    <h2 class="dispatch-heading">Rit</h2>
+                    @if ($booking)
+                        <p class="mt-2 font-semibold">{{ $booking->reference }}</p>
+                        <p class="dispatch-muted" data-initial="{{ $liveLabels[$booking->booking_status] ?? '' }}" x-text="sameRide ? @js($liveLabels)[state.active_booking.status] : $el.dataset.initial">{{ $liveLabels[$booking->booking_status] ?? '' }}</p>
+                        <p class="dispatch-route mt-2 text-sm"><span>{{ $booking->pickup }}</span><span>naar {{ $booking->destination }}</span></p>
+                        <div class="mt-2 flex flex-wrap gap-x-3">
+                            <a class="dispatch-link" href="{{ route('admin.bookings.show', $booking) }}">Beheer</a>
+                            <a class="dispatch-link" href="{{ $booking->trackingUrl() }}" target="_blank" rel="noopener">Volg rit</a>
                         </div>
-                        <dl class="mt-5 space-y-4 text-sm">
-                            <div><dt class="text-slate-400">Klant</dt><dd class="font-bold">{{ $booking->customer_name }}</dd></div>
-                            <div><dt class="text-slate-400">Pickup</dt><dd class="font-bold">{{ $booking->pickup }}</dd></div>
-                            <div><dt class="text-slate-400">Destination</dt><dd class="font-bold">{{ $booking->destination }}</dd></div>
-                            <div><dt class="text-slate-400">Prijs</dt><dd class="font-bold">EUR {{ number_format($booking->calculatedFare(), 2, ',', '.') }}</dd></div>
-                            <div><dt class="text-slate-400">ETA</dt><dd class="font-bold">{{ $booking->driver_eta_min ?: $booking->duration_min }} min</dd></div>
-                        </dl>
-                    </div>
-                @else
-                    <div class="rounded-lg border border-white/10 bg-white/5 p-4 text-slate-300">Geen actieve boeking.</div>
-                @endif
-
-                <div class="grid grid-cols-2 gap-3 text-sm font-black">
-                    <span class="rounded-lg bg-yellow-400 p-3 text-slate-950">Geel = Nieuw</span>
-                    <span class="rounded-lg bg-blue-500 p-3 text-white">Blauw = Toegewezen</span>
-                    <span class="rounded-lg bg-green-500 p-3 text-white">Groen = Actief</span>
-                    <span class="rounded-lg bg-red-500 p-3 text-white">Rood = Mislukt</span>
-                    <span class="rounded-lg bg-slate-500 p-3 text-white">Grijs = Geannuleerd</span>
-                </div>
+                    @else
+                        <p class="dispatch-muted mt-2">Geen open rit.</p>
+                    @endif
+                </section>
             </aside>
-        </main>
-    </div>
+        </div>
+    </main>
 </x-app-layout>

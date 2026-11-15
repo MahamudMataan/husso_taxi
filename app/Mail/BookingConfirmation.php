@@ -16,15 +16,16 @@ class BookingConfirmation extends Mailable
     public function __construct(
         public Booking $booking,
         public bool $forStaff = false,
+        public ?string $event = null,
     ) {
     }
 
     public function envelope(): Envelope
     {
-        $prefix = match ($this->booking->admin_status) {
-            'accepted' => $this->forStaff ? 'Husso Taxi rit geaccepteerd' : 'Je Husso Taxi rit is bevestigd',
-            'rejected' => $this->forStaff ? 'Husso Taxi rit geweigerd' : 'Update over je Husso Taxi aanvraag',
-            default => $this->forStaff ? 'Nieuwe Husso Taxi rit' : 'Husso Taxi ritaanvraag ontvangen',
+        $prefix = $this->forStaff ? 'Nieuwe reservering' : match ($this->event) {
+            'booking_accepted' => 'Je Husso Taxi rit is bevestigd',
+            'booking_declined' => 'Update over je Husso Taxi aanvraag',
+            default => 'Husso Taxi ritaanvraag ontvangen',
         };
 
         return new Envelope(

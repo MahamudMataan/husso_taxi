@@ -42,9 +42,12 @@ class BookingStatusUpdate extends Mailable
             'booking_accepted' => $english ? 'Your Husso Taxi ride is accepted' : 'Je Husso Taxi rit is geaccepteerd',
             'driver_assigned' => $english ? 'Your Husso Taxi driver is assigned' : 'Je Husso Taxi chauffeur is toegewezen',
             'driver_arriving' => $english ? 'Your driver is on the way' : 'Je chauffeur is onderweg',
+            'driver_arrived' => $english ? 'Your driver has arrived' : 'Je chauffeur is aangekomen',
             'trip_started' => $english ? 'Your trip has started' : 'Je rit is gestart',
             'trip_completed' => $english ? 'Your trip is complete' : 'Je rit is afgerond',
             'payment_failed' => $english ? 'Payment needs attention' : 'Betaling vraagt aandacht',
+            'payment_received' => $english ? 'Your payment was received' : 'Je betaling is ontvangen',
+            'trip_canceled' => $english ? 'Your ride was cancelled' : 'Je rit is geannuleerd',
             default => $english ? 'Husso Taxi booking update' : 'Husso Taxi boekingsupdate',
         };
     }

@@ -9,6 +9,7 @@ use App\Models\BookingNotification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Throwable;
 
 class SendBookingNotification implements ShouldQueue
@@ -26,30 +27,47 @@ class SendBookingNotification implements ShouldQueue
         public int $bookingId,
         public string $event,
         public string $channel,
+        public ?string $recipient = null,
     ) {
+    }
+
+    public function middleware(): array
+    {
+        return [(new WithoutOverlapping($this->bookingId.':'.$this->event.':'.$this->channel))->releaseAfter(30)->expireAfter(180)];
     }
 
     public function handle(): void
     {
         $booking = Booking::findOrFail($this->bookingId);
-        $recipient = $booking->customer_email;
-        $message = $this->message($booking);
+        $forStaff = $this->event === 'staff_booking_created';
+        $recipient = $this->recipient ?? ($forStaff ? config('services.booking.staff_email') : $booking->customer_email);
+        if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
 
-        $notification = BookingNotification::create([
+        $criteria = [
             'booking_id' => $booking->id,
             'event' => $this->event,
             'channel' => $this->channel,
             'recipient' => $recipient,
-            'message' => $message,
+        ];
+        if (BookingNotification::where($criteria)->where('status', 'sent')->exists()) {
+            return;
+        }
+        $notification = BookingNotification::firstOrCreate($criteria, [
             'status' => 'queued',
         ]);
 
         try {
-            Mail::to($recipient)->send($this->mailFor($booking));
+            $sent = Mail::to($recipient)->send($this->mailFor($booking));
+            if (! $sent) {
+                throw new \RuntimeException('The mail transport did not accept the message.');
+            }
 
             $notification->update([
                 'status' => 'sent',
                 'sent_at' => now(),
+                'error_message' => null,
             ]);
 
             if (in_array($this->event, ['booking_created', 'booking_accepted'], true)) {
@@ -58,7 +76,7 @@ class SendBookingNotification implements ShouldQueue
         } catch (Throwable $exception) {
             $notification->update([
                 'status' => 'failed',
-                'error_message' => $exception->getMessage(),
+                'error_message' => $exception::class,
             ]);
 
             throw $exception;
@@ -67,43 +85,14 @@ class SendBookingNotification implements ShouldQueue
 
     private function mailFor(Booking $booking): BookingConfirmation|BookingStatusUpdate
     {
+        if ($this->event === 'booking_accepted' && ($booking->admin_status !== 'accepted' || $booking->booking_status === 'canceled')) {
+            return new BookingStatusUpdate($booking, $booking->payment_status === 'paid' ? 'payment_received' : 'booking_status_changed');
+        }
+
         return match ($this->event) {
-            'booking_created', 'booking_accepted' => new BookingConfirmation($booking),
+            'staff_booking_created' => new BookingConfirmation($booking, true, $this->event),
+            'booking_created', 'booking_accepted', 'booking_declined' => new BookingConfirmation($booking, false, $this->event),
             default => new BookingStatusUpdate($booking, $this->event),
-        };
-    }
-
-    private function message(Booking $booking): string
-    {
-        $english = $booking->language === 'en';
-        $trackingUrl = $booking->trackingUrl();
-        $eta = $booking->driver_eta_min ?: $booking->duration_min;
-
-        return match ($this->event) {
-            'booking_created' => $english
-                ? "Husso Taxi received your request {$booking->reference}. Track: {$trackingUrl}"
-                : "Husso Taxi heeft je aanvraag {$booking->reference} ontvangen. Volg: {$trackingUrl}",
-            'booking_accepted' => $english
-                ? "Your Husso Taxi ride {$booking->reference} is accepted. Track: {$trackingUrl}"
-                : "Je Husso Taxi rit {$booking->reference} is geaccepteerd. Volg: {$trackingUrl}",
-            'driver_assigned' => $english
-                ? "Driver {$booking->driver_name} is assigned to {$booking->reference}. ETA {$eta} min. {$trackingUrl}"
-                : "Chauffeur {$booking->driver_name} is toegewezen aan {$booking->reference}. ETA {$eta} min. {$trackingUrl}",
-            'driver_arriving' => $english
-                ? "Your driver is arriving in about {$eta} min for {$booking->reference}. {$trackingUrl}"
-                : "Je chauffeur arriveert over ongeveer {$eta} min voor {$booking->reference}. {$trackingUrl}",
-            'trip_started' => $english
-                ? "Your Husso Taxi trip {$booking->reference} has started. Follow progress: {$trackingUrl}"
-                : "Je Husso Taxi rit {$booking->reference} is gestart. Volg de rit: {$trackingUrl}",
-            'trip_completed' => $english
-                ? "Your Husso Taxi trip {$booking->reference} is complete. Thank you for riding with us."
-                : "Je Husso Taxi rit {$booking->reference} is afgerond. Bedankt voor je rit.",
-            'payment_failed' => $english
-                ? "Payment for {$booking->reference} failed or expired. Please contact Husso Taxi. {$trackingUrl}"
-                : "De betaling voor {$booking->reference} is mislukt of verlopen. Neem contact op met Husso Taxi. {$trackingUrl}",
-            default => $english
-                ? "Husso Taxi update for {$booking->reference}: {$trackingUrl}"
-                : "Husso Taxi update voor {$booking->reference}: {$trackingUrl}",
         };
     }
 }

@@ -15,6 +15,8 @@ return [
 
     'default' => env('QUEUE_CONNECTION', 'database'),
 
+    'booking_mail_queue' => 'booking-mail',
+
     /*
     |--------------------------------------------------------------------------
     | Queue Connections

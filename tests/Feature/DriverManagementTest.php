@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\DriverBreakRequest;
 use App\Models\DriverTimeLog;
+use App\Models\DriverShiftBreak;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -11,6 +12,27 @@ use Tests\TestCase;
 class DriverManagementTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_today_allows_the_administrator_to_record_a_single_pause_and_finish_a_shift(): void
+    {
+        $clock = route('dashboard.driver.clock');
+        $this->post($clock, ['action' => 'in'])->assertRedirect(route('login'));
+        $this->actingAs(User::factory()->create())->get(route('driver.dashboard'))->assertForbidden();
+        $this->post($clock, ['action' => 'in'])->assertForbidden();
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+
+        $this->get(route('driver.dashboard'))->assertOk()->assertSee('Dienst starten');
+        $this->post($clock, ['action' => 'in'])->assertRedirect();
+        $this->post($clock, ['action' => 'in'])->assertRedirect();
+        $this->post($clock, ['action' => 'break'])->assertRedirect();
+        $this->post($clock, ['action' => 'break'])->assertRedirect();
+        $this->get(route('driver.dashboard'))->assertSee('Dienst hervatten');
+        $this->assertDatabaseCount('driver_time_logs', 1);
+        $this->assertDatabaseCount('driver_shift_breaks', 1);
+        $this->post($clock, ['action' => 'out'])->assertRedirect();
+        $this->assertNotNull(DriverShiftBreak::firstOrFail()->ended_at);
+        $this->assertNotNull(DriverTimeLog::firstOrFail()->clocked_out_at);
+    }
 
     public function test_driver_can_clock_in_and_out(): void
     {

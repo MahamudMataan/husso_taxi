@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DriverTimeLog extends Model
 {
@@ -11,6 +12,11 @@ class DriverTimeLog extends Model
         'clocked_in_at',
         'clocked_out_at',
     ];
+
+    public function breaks(): HasMany
+    {
+        return $this->hasMany(DriverShiftBreak::class);
+    }
 
     protected function casts(): array
     {

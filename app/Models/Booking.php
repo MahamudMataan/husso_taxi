@@ -2,13 +2,24 @@
 
 namespace App\Models;
 
-use App\Services\BookingPriceCalculator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Booking extends Model
 {
+    public const ACTIVE_STATUSES = ['driver_en_route', 'arrived', 'picked_up'];
+    public const OPEN_STATUSES = ['new', 'driver_assigned', ...self::ACTIVE_STATUSES];
+    public const LOCATION_EXPIRY_SECONDS = 75;
+
+    private const DISPATCH_SEQUENCE = [
+        'new' => 'driver_assigned',
+        'driver_assigned' => 'driver_en_route',
+        'driver_en_route' => 'arrived',
+        'arrived' => 'picked_up',
+        'picked_up' => 'completed',
+    ];
+
     protected $fillable = [
         'reference',
         'tracking_token',
@@ -32,6 +43,11 @@ class Booking extends Model
         'km_rate',
         'minute_rate',
         'quoted_amount',
+        'fare_type',
+        'departure_supplement_cents',
+        'invoice_requested',
+        'invoice_details',
+        'request_token',
         'payment_method',
         'payment_status',
         'booking_status',
@@ -64,8 +80,12 @@ class Booking extends Model
             'km_rate' => 'decimal:2',
             'minute_rate' => 'decimal:2',
             'quoted_amount' => 'decimal:2',
+            'departure_supplement_cents' => 'integer',
+            'invoice_requested' => 'boolean',
+            'invoice_details' => 'array',
             'driver_latitude' => 'decimal:7',
             'driver_longitude' => 'decimal:7',
+            'driver_location_shared_at' => 'datetime',
             'payment_collected_at' => 'datetime',
             'reviewed_at' => 'datetime',
             'confirmed_at' => 'datetime',
@@ -82,19 +102,56 @@ class Booking extends Model
         return route('bookings.track', $this->tracking_token);
     }
 
+    public function nextDispatchStatus(): ?string
+    {
+        return self::DISPATCH_SEQUENCE[$this->booking_status] ?? null;
+    }
+
+    public function canCancelDispatch(): bool
+    {
+        return in_array($this->booking_status, self::OPEN_STATUSES, true);
+    }
+
+    public function sharedDriverLocation(): ?array
+    {
+        if (! in_array($this->booking_status, self::ACTIVE_STATUSES, true)
+            || $this->driver_location_shared_at === null
+            || $this->driver_location_shared_at->lte(now()->subSeconds(self::LOCATION_EXPIRY_SECONDS))
+            || $this->driver_latitude === null
+            || $this->driver_longitude === null) {
+            return null;
+        }
+
+        return [
+            'latitude' => (float) $this->driver_latitude,
+            'longitude' => (float) $this->driver_longitude,
+            'updated_at' => $this->driver_location_shared_at->toIso8601String(),
+        ];
+    }
+
     public function distanceFare(): float
     {
-        return round((float) $this->distance_km * BookingPriceCalculator::KM_RATE, 2);
+        return round((float) $this->distance_km * (float) $this->km_rate, 2);
     }
 
     public function timeFare(): float
     {
-        return round((int) $this->duration_min * BookingPriceCalculator::MINUTE_RATE, 2);
+        return round((int) $this->duration_min * (float) $this->minute_rate, 2);
     }
 
     public function calculatedFare(): float
     {
-        return round($this->distanceFare() + $this->timeFare(), 2);
+        return (float) $this->quoted_amount;
+    }
+
+    public function paymentMethodLabel(bool $english = false): string
+    {
+        return match ($this->payment_method) {
+            'cash' => $english ? 'Cash in the taxi' : 'Contant in de taxi',
+            'pin' => $english ? 'Debit card in the taxi' : 'Pinnen in de taxi',
+            'ideal' => 'iDEAL',
+            default => $english ? 'Pay later' : 'Later betalen',
+        };
     }
 
     public function notifications(): HasMany
